@@ -446,17 +446,20 @@ async function fetchLiveArbs() {
                 const uniqueCheck = new Set(bestMultiLegs.map(l => cleanBookie(l.bookmaker)));
                 if (uniqueCheck.size < 2) return; // NUCLEAR OPTION: Discard if still only 1 bookie
                 
-                const calc = calculateArbitrage(bestMultiLegs);
-                matches.push({
-                    id: game.id,
-                    sport: game.sport_title,
-                    matchup: `${game.home_team} vs ${game.away_team}`,
-                    time: new Date(game.commence_time).toLocaleString(),
-                    legs: bestMultiLegs,
-                    margin: calc.margin,
-                    totalProb: calc.totalProb,
-                    isArb: calc.isArb
-                });
+                // ONLY PUSH IF MARGIN IS DECENT (> 0.05%) TO AVOID "0 WINNING" SUGGESTIONS
+                if (bestMultiMargin > 0.05) {
+                    const calc = calculateArbitrage(bestMultiLegs);
+                    matches.push({
+                        id: game.id,
+                        sport: game.sport_title,
+                        matchup: `${game.home_team} vs ${game.away_team}`,
+                        time: new Date(game.commence_time).toLocaleString(),
+                        legs: bestMultiLegs,
+                        margin: calc.margin,
+                        totalProb: calc.totalProb,
+                        isArb: calc.isArb
+                    });
+                }
             }
         });
 

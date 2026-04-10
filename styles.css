@@ -723,10 +723,32 @@ body {
 }
 
 @keyframes ticker {
-    0% {
-        transform: translate3d(100vw, 0, 0);
-    }
-    100% {
-        transform: translate3d(-100%, 0, 0);
-    }
+    0% { transform: translate3d(100vw, 0, 0); }
+    100% { transform: translate3d(-100%, 0, 0); }
+}
+
+/* Flash v2.2 Aesthetics */
+.ticker-odds {
+    color: var(--accent-green);
+    font-weight: bold;
+    margin-left: 0.25rem;
+    text-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+}
+
+.ticker-item {
+    border-right: 1px solid rgba(255,255,255,0.05);
+}
+
+.primary-btn:hover {
+    box-shadow: 0 0 15px var(--accent-blue);
+    transform: translateY(-1px);
+}
+
+.logo-icon {
+    animation: flash-glow 2s infinite alternate;
+}
+
+@keyframes flash-glow {
+    from { text-shadow: 0 0 5px var(--accent-blue); }
+    to { text-shadow: 0 0 20px var(--accent-blue), 0 0 30px var(--accent-blue); }
 }

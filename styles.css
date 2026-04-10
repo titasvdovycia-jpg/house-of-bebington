@@ -617,3 +617,116 @@ body {
     transform: scale(1.2);
     background: var(--accent-green);
 }
+
+/* Bankroll Manager */
+.bookie-balances-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.bookie-balance-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.bookie-balance-card h4 {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.bookie-balance-input {
+    background: #222;
+    border: 1px solid #444;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 1rem;
+    width: 100%;
+}
+
+.blacklist-tag {
+    background: rgba(255, 68, 68, 0.1);
+    color: #ff4444;
+    border: 1px solid rgba(255, 68, 68, 0.3);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.blacklist-tag button {
+    background: transparent;
+    border: none;
+    color: #ff4444;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+/* Stock Market Ticker */
+.ticker-wrap {
+    width: 100%;
+    overflow: hidden;
+    background-color: #111;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.5rem 0;
+    box-sizing: border-box;
+}
+
+.ticker {
+    display: inline-flex;
+    white-space: nowrap;
+    animation: ticker 40s linear infinite;
+}
+
+.ticker:hover {
+    animation-play-state: paused;
+}
+
+.ticker-item {
+    display: inline-block;
+    padding: 0 2rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-family: inherit; /* use the app's clean font */
+}
+
+.ticker-team {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.ticker-odds {
+    color: var(--accent-green);
+    font-weight: bold;
+    margin-left: 0.25rem;
+}
+
+.ticker-odds.underdog {
+    color: #ffaa44; /* orange-ish for underdogs */
+}
+
+.ticker-divider {
+    color: #333;
+    padding: 0 0.5rem;
+}
+
+@keyframes ticker {
+    0% {
+        transform: translate3d(100vw, 0, 0);
+    }
+    100% {
+        transform: translate3d(-100%, 0, 0);
+    }
+}

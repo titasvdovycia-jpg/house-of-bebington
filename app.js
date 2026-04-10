@@ -59,9 +59,22 @@ function calculateKelly(match, bankroll) {
     });
 }
 
-// Formatters
 const formatCurrency = (val) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(val);
 const formatOdds = (val) => val.toFixed(2);
+
+// Bookmaker Search Patterns (Level 1 Automation)
+const BOOKIE_SEARCH_URLS = {
+    'betfair': 'https://www.betfair.com/exchange/plus/search?q=',
+    '888sport': 'https://www.888sport.com/search?q=',
+    'william hill': 'https://sports.williamhill.com/betting/en-gb/search?q=',
+    'paddy power': 'https://www.paddypower.com/search?q=',
+    'sky bet': 'https://m.skybet.com/search?q=',
+    'ladbrokes': 'https://sports.ladbrokes.com/search?q=',
+    'coral': 'https://sports.coral.co.uk/search?q=',
+    'unibet': 'https://www.unibet.co.uk/search?q=',
+    'betfred': 'https://www.betfred.com/sports/search?q=',
+    'bet victor': 'https://www.betvictor.com/en-gb/sports/all/search?q='
+};
 
 // App State
 let currentBankroll = parseFloat(localStorage.getItem('arb_bankroll')) || 1000;
@@ -384,13 +397,21 @@ function renderArbCard(match, index, strategy = 'arb') {
     const profit = guaranteedReturn - currentBankroll;
 
     let legsHtml = '';
+    const mainTeam = match.matchup.split(' vs ')[0]; // Use first team for search
+
     stakedLegs.forEach((leg, i) => {
         const k = kellyInfo[i];
+        const searchBase = BOOKIE_SEARCH_URLS[cleanBookie(leg.bookmaker)];
+        const searchUrl = searchBase ? `${searchBase}${encodeURIComponent(mainTeam)}` : '#';
+
         legsHtml += `
             <div class="arb-leg">
                 <div class="leg-top">
                     <div>
-                        <div class="bookmaker-name">${leg.bookmaker}</div>
+                        <div class="bookmaker-name">
+                            ${leg.bookmaker}
+                            ${searchBase ? `<a href="${searchUrl}" target="_blank" class="quick-jump-link" title="Quick Search on ${leg.bookmaker}">⚡</a>` : ''}
+                        </div>
                         <div class="leg-outcome">${leg.outcome}</div>
                     </div>
                     <div class="leg-odds">${formatOdds(leg.odds)}</div>

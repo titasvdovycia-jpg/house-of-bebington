@@ -62,9 +62,10 @@ function calculateKelly(match, bankroll) {
 const formatCurrency = (val) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(val);
 const formatOdds = (val) => val.toFixed(2);
 
+const BOOKIE_BLACKLIST = ['betfair']; 
+
 // Bookmaker Search Patterns (Level 1 Automation)
 const BOOKIE_SEARCH_URLS = {
-    'betfair': 'https://www.betfair.com/sport/search?q=',
     '888sport': 'https://www.888sport.com/search?q=',
     'william hill': 'https://sports.williamhill.com/betting/en-gb/search?q=',
     'paddy power': 'https://www.paddypower.com/search?q=',
@@ -295,6 +296,9 @@ async function fetchLiveArbs() {
         const matches = [];
 
         data.forEach(game => {
+            // NUCLEAR OPTION: Scrub Betfair from the raw data before ANY processing
+            game.bookmakers = game.bookmakers.filter(b => !BOOKIE_BLACKLIST.some(black => b.title.toLowerCase().includes(black)));
+
             const outcomeNames = [...new Set(game.bookmakers.flatMap(b => b.markets.find(m => m.key === 'h2h')?.outcomes.map(o => o.name) || []))];
             if (outcomeNames.length < 2) return;
 

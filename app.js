@@ -215,54 +215,80 @@ async function fetchLiveArbs() {
         const matches = [];
 
         data.forEach(game => {
-            const bestOdds = {}; // Map of outcome_name -> { price, bookmaker }
-            
+            const outcomeNames = [...new Set(game.bookmakers.flatMap(b => b.markets.find(m => m.key === 'h2h')?.outcomes.map(o => o.name) || []))];
+            if (outcomeNames.length < 2) return;
+
+            let bestMultiMargin = -999;
+            let bestMultiLegs = [];
+
+            // Cross-Bookmaker Engine: 
+            const globalBest = {}; 
             game.bookmakers.forEach(bookie => {
                 const h2h = bookie.markets.find(m => m.key === 'h2h');
-                if (h2h) {
-                    h2h.outcomes.forEach(outcome => {
-                        const name = outcome.name;
-                        const price = outcome.price;
-                        
-                        if (!bestOdds[name] || price > bestOdds[name].price) {
-                            bestOdds[name] = { 
-                                outcome: name, 
-                                odds: price, 
-                                bookmaker: bookie.title 
-                            };
-                        }
-                    });
-                }
+                if (!h2h) return;
+                h2h.outcomes.forEach(o => {
+                    if (!globalBest[o.name] || o.price > globalBest[o.name].price) {
+                        globalBest[o.name] = { price: o.price, bookie: bookie.title };
+                    }
+                });
             });
 
-            // Convert map to array of legs
-            const legs = Object.values(bestOdds);
-            
-            // Only consider games where we found odds for all sides
-            if (legs.length >= 2) {
-                const calc = calculateArbitrage(legs);
-                
-                // TWO-BOOKIE RULE: Count unique bookmakers
-                const uniqueBookies = new Set(legs.map(l => l.bookmaker));
-                const hasVariety = uniqueBookies.size > 1;
+            const globalLegs = Object.values(globalBest);
+            const globalUnique = new Set(globalLegs.map(l => l.bookie));
 
+            if (globalUnique.size > 1) {
+                const calc = calculateArbitrage(globalLegs.map(l => ({ outcome: '', odds: l.price, bookmaker: l.bookie }))); 
+                bestMultiMargin = calc.margin;
+                bestMultiLegs = Object.keys(globalBest).map(name => ({
+                    outcome: name,
+                    odds: globalBest[name].price,
+                    bookmaker: globalBest[name].bookie
+                }));
+            } else {
+                outcomeNames.forEach(nameToSwap => {
+                    let secondBestPrice = 0;
+                    let secondBestBookie = '';
+                    game.bookmakers.forEach(bookie => {
+                        if (bookie.title === globalLegs[0].bookie) return; 
+                        const h2h = bookie.markets.find(m => m.key === 'h2h');
+                        if (!h2h) return;
+                        const o = h2h.outcomes.find(out => out.name === nameToSwap);
+                        if (o && o.price > secondBestPrice) {
+                            secondBestPrice = o.price;
+                            secondBestBookie = bookie.title;
+                        }
+                    });
+
+                    if (secondBestPrice > 0) {
+                        const testLegs = outcomeNames.map(n => {
+                            if (n === nameToSwap) return { outcome: n, odds: secondBestPrice, bookmaker: secondBestBookie };
+                            return { outcome: n, odds: globalBest[n].price, bookmaker: globalBest[n].bookie };
+                        });
+                        const calc = calculateArbitrage(testLegs);
+                        if (calc.margin > bestMultiMargin) {
+                            bestMultiMargin = calc.margin;
+                            bestMultiLegs = testLegs;
+                        }
+                    }
+                });
+            }
+
+            if (bestMultiLegs.length >= 2 && bestMultiMargin > -20) {
+                const calc = calculateArbitrage(bestMultiLegs);
                 matches.push({
                     id: game.id,
                     sport: game.sport_title,
                     matchup: `${game.home_team} vs ${game.away_team}`,
                     time: new Date(game.commence_time).toLocaleString(),
-                    legs: legs,
+                    legs: bestMultiLegs,
                     margin: calc.margin,
                     totalProb: calc.totalProb,
-                    isArb: calc.isArb && hasVariety, // Only TRUE Arb if from different houses
-                    hasVariety: hasVariety
+                    isArb: calc.isArb
                 });
             }
         });
 
-        // SORTING: 
-        // 1. Genuine Arbs (Different bookies) first, highest margin
-        // 2. High margin single-bookie (non-arbs) second
+        // SORTING: Genuine Multi-Bookie Arbs first
         matches.sort((a, b) => {
             if (a.isArb && !b.isArb) return -1;
             if (!a.isArb && b.isArb) return 1;

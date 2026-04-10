@@ -64,7 +64,7 @@ const formatOdds = (val) => val.toFixed(2);
 
 // Bookmaker Search Patterns (Level 1 Automation)
 const BOOKIE_SEARCH_URLS = {
-    'betfair': 'https://www.betfair.com/exchange/plus/search?q=',
+    'betfair': 'https://www.betfair.com/sport/search?q=',
     '888sport': 'https://www.888sport.com/search?q=',
     'william hill': 'https://sports.williamhill.com/betting/en-gb/search?q=',
     'paddy power': 'https://www.paddypower.com/search?q=',
@@ -73,7 +73,11 @@ const BOOKIE_SEARCH_URLS = {
     'coral': 'https://sports.coral.co.uk/search?q=',
     'unibet': 'https://www.unibet.co.uk/search?q=',
     'betfred': 'https://www.betfred.com/sports/search?q=',
-    'bet victor': 'https://www.betvictor.com/en-gb/sports/all/search?q='
+    'bet victor': 'https://www.betvictor.com/en-gb/sports/all/search?q=',
+    'smarkets': 'https://smarkets.com/search?query=',
+    'matchbook': 'https://www.matchbook.com/search?q=',
+    'boylesports': 'https://www.boylesports.com/sports/search?q=',
+    'betway': 'https://betway.com/en-gb/sports/all/search?q='
 };
 
 // App State
@@ -91,7 +95,7 @@ const SPORT_CONFIG = [
     { key: 'basketball_euroleague', name: 'EuroLeague' },
     { key: 'basketball_ncaab', name: 'NCAAB (College)' },
     { key: 'soccer_epl', name: 'Premier League' },
-    { key: 'soccer_uefa_champions_league', name: 'Champions League' },
+    { key: 'soccer_uefa_champs_league', name: 'Champions League' },
     { key: 'tennis_atp_monte_carlo_masters', name: 'ATP Tennis' },
     { key: 'mma_mixed_martial_arts', name: 'UFC (MMA)' },
     { key: 'cricket_ipl', name: 'IPL (Cricket)' },

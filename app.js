@@ -77,7 +77,15 @@ const BOOKIE_SEARCH_URLS = {
     'smarkets': 'https://smarkets.com/search?query=',
     'matchbook': 'https://www.matchbook.com/search?q=',
     'boylesports': 'https://www.boylesports.com/sports/search?q=',
-    'betway': 'https://betway.com/en-gb/sports/all/search?q='
+    'betway': 'https://betway.com/en-gb/sports/all/search?q=',
+    'grosvenor': 'https://www.grosvenorcasinos.com/sport#search/query=',
+    'livescore': 'https://www.livescorebet.com/uk/search?q=',
+    'virgin': 'https://www.virginbet.com/uk/search?q=',
+    '10bet': 'https://www.10bet.co.uk/search?q=',
+    'spreadex': 'https://www.spreadex.com/sports/search?q=',
+    'kwiff': 'https://kwiff.com/search?q=',
+    'leovegas': 'https://www.leovegas.com/en-gb/sport#search/query=',
+    'mr green': 'https://www.mrgreen.com/en-gb/betting#search/query='
 };
 
 // App State
@@ -234,8 +242,17 @@ async function sendTelegramReport(topMatches) {
 
 // --- API Logic ---
 function cleanBookie(name) {
-    // Normalizes "Betfair Exchange", "Betfair Sportsbook", "Betfair (UK)" -> "Betfair"
-    return name.split(' ')[0].split('(')[0].trim().toLowerCase();
+    // Normalizes "Betfair Exchange", "Betfair Sportsbook", "Betfair (UK)" -> "betfair"
+    // Also handles multi-word names like "William Hill" or "Paddy Power"
+    let clean = name.toLowerCase().split('(')[0].trim();
+    if (clean.includes('betfair')) return 'betfair';
+    if (clean.includes('william hill')) return 'william hill';
+    if (clean.includes('paddy power')) return 'paddy power';
+    if (clean.includes('sky bet')) return 'sky bet';
+    if (clean.includes('grosvenor')) return 'grosvenor';
+    if (clean.includes('livescore')) return 'livescore';
+    if (clean.includes('virgin')) return 'virgin';
+    return clean;
 }
 
 async function fetchLiveArbs() {
@@ -406,7 +423,7 @@ function renderArbCard(match, index, strategy = 'arb') {
     stakedLegs.forEach((leg, i) => {
         const k = kellyInfo[i];
         const searchBase = BOOKIE_SEARCH_URLS[cleanBookie(leg.bookmaker)];
-        const searchUrl = searchBase ? `${searchBase}${encodeURIComponent(mainTeam)}` : '#';
+        const searchUrl = searchBase ? `${searchBase}${encodeURIComponent(mainTeam)}` : `https://www.google.com/search?q=${encodeURIComponent(leg.bookmaker + ' ' + mainTeam)}`;
 
         legsHtml += `
             <div class="arb-leg">

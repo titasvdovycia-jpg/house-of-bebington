@@ -306,6 +306,7 @@ async function fetchLiveArbs() {
             // 1. Find the best price for each outcome across all bookies
             const globalBest = {}; 
             game.bookmakers.forEach(bookie => {
+                if (bookie.title.toLowerCase().includes('betfair')) return;
                 const h2h = bookie.markets.find(m => m.key === 'h2h');
                 if (!h2h) return;
                 h2h.outcomes.forEach(o => {
@@ -338,6 +339,7 @@ async function fetchLiveArbs() {
                     let secondBestPrice = 0;
                     let secondBestBookie = '';
                     game.bookmakers.forEach(bookie => {
+                        if (bookie.title.toLowerCase().includes('betfair')) return;
                         if (bookie.title === globalLegs[0].bookie) return; // Skip the dominant bookie
                         const h2h = bookie.markets.find(m => m.key === 'h2h');
                         if (!h2h) return;

@@ -1,4 +1,14 @@
-console.log("🚀 House of Bebington Engine v2.1 LOADED - Includes Ticker & Bankroll");
+// FLASH ENGINE v2.2 - GLOBAL RESILIENCE WRAPPER
+window.onerror = function(msg, url, line, col, error) {
+    const overlay = document.getElementById('flash-error-overlay');
+    const statusText = document.getElementById('error-message-text');
+    if (overlay && statusText) {
+        overlay.style.display = 'block';
+        statusText.innerHTML = `ERROR: ${msg}<br><br>Source: ${url.split('/').pop()}<br>Line: ${line}`;
+    }
+};
+
+console.log("⚡ [FLASH ENGINE] v2.2: Online & Initializing...");
 
 // Arbitrage Math Utility (Using European Decimal Odds)
 function calculateArbitrage(legs) {
@@ -333,7 +343,24 @@ async function fetchLiveArbs() {
         const results = await Promise.all(fetchPromises);
         
         // Combine all arrays of games into one massive list
-        const data = results.flat();
+        let allData = results.flat();
+        
+        // DEDUPLICATION: Some games might appear in both regions. We merge bookmakers for the same ID.
+        const dedupedMap = new Map();
+        allData.forEach(game => {
+            if (!dedupedMap.has(game.id)) {
+                dedupedMap.set(game.id, game);
+            } else {
+                const existing = dedupedMap.get(game.id);
+                // Merge bookmakers, avoiding duplicates by title
+                game.bookmakers.forEach(b => {
+                    if (!existing.bookmakers.some(eb => eb.title === b.title)) {
+                        existing.bookmakers.push(b);
+                    }
+                });
+            }
+        });
+        const data = Array.from(dedupedMap.values());
         
         // Parse the data to find best odds
         const matches = [];
@@ -1045,14 +1072,19 @@ function updateTokenHealth() {
     }
 }
 
-// Init - set settings value if exists
-DOM.apiKeyInput.value = apiKey;
-DOM.tgTokenInput.value = tgToken;
-DOM.tgChatIdInput.value = tgChatId;
+// Wrap critical init in try-catch to prevent engine stall
+try {
+    if (DOM.apiKeyInput) DOM.apiKeyInput.value = apiKey;
+    if (DOM.tgTokenInput) DOM.tgTokenInput.value = tgToken;
+    if (DOM.tgChatIdInput) DOM.tgChatIdInput.value = tgChatId;
 
-renderSportsGrid();
-updateTokenHealth();
-updateBankrollUI();
+    renderSportsGrid();
+    updateTokenHealth();
+    updateBankrollUI();
+} catch (e) {
+    console.error("FLASH ENGINE INIT ERROR:", e);
+    window.onerror(e.message, "app.js", 1050);
+}
 
 window.updateProfitChart = function() {
     if (!DOM.profitChart) return;
@@ -1189,29 +1221,4 @@ async function autoResolveBets() {
 async function sendTelegramSettlement(bet, result, winningLegIndex) {
     if (!tgToken || !tgChatId) return;
     
-    let reportText = `✅ *Bet Settled Automatically!*\n\n`;
-    reportText += `Match: ${bet.matchup}\n`;
-    
-    if (result === 'won') {
-        const winningLeg = bet.legs[winningLegIndex];
-        const payout = winningLeg.stake * winningLeg.odds;
-        const netProfit = payout - bet.totalStake;
-        const cb = cleanBookie(winningLeg.bookmaker);
-        const newBalance = bookieBalances[cb];
-        
-        reportText += `Winner: ${winningLeg.outcome}\n`;
-        reportText += `Net Profit: +£${netProfit.toFixed(2)}\n`;
-        reportText += `Funds injected into: *${winningLeg.bookmaker}*\n\n`;
-        reportText += `💡 *Rebalancing Advice*: Your ${winningLeg.bookmaker} balance is now £${newBalance.toFixed(2)}. Suggestion: Withdraw £${(payout * 0.75).toFixed(2)} to your bank module to top up heavily depleted accounts.`;
-    }
-
-    let cleanToken = tgToken.replace(/[^a-zA-Z0-9:\-_]/g, '');
-    let cleanChat = tgChatId.replace(/[^0-9\-]/g, '');
-    if (cleanToken.toLowerCase().startsWith('bot')) cleanToken = cleanToken.substring(3);
-
-    const telegramUrl = `https://api.telegram.org/bot${cleanToken}/sendMessage?chat_id=${cleanChat}&text=${encodeURIComponent(reportText)}&parse_mode=Markdown`;
-    fetch(telegramUrl).catch(e => console.error(e));
-}
-
-// Inject AutoSettle to safeAutoScan to let it run passively efficiently
-const originalSafeAutoScan = safeAuto
+    let reportText 

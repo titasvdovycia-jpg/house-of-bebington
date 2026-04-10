@@ -165,6 +165,7 @@ const SPORT_CONFIG = [
 ];
 
 const DOM = {
+    actionCenter: document.getElementById('action-center'),
     arbFeed: document.getElementById('arb-feed'),
     globalBankroll: document.getElementById('global-bankroll'),
     bankrollAvailable: document.getElementById('bankroll-available'),
@@ -685,34 +686,44 @@ function updateMatchStrategy(matchId, newStrategy) {
 }
 
 function updateDashboard() {
-    if (loadedMatches.length === 0) return;
-
-    let html = '';
-    let arbCount = 0;
+    if (!DOM.arbFeed) return;
     
-    // Display the top 10 matches (Arbs OR closest to Arb)
-    const displayMatches = loadedMatches.slice(0, 10);
-    
-    displayMatches.forEach((match, index) => {
-        if (match.isArb) arbCount++;
-        html += renderArbCard(match, index);
+    // Sort loadedMatches: Arbs first, then by margin
+    loadedMatches.sort((a, b) => {
+        if (a.isArb && !b.isArb) return -1;
+        if (!a.isArb && b.isArb) return 1;
+        return b.margin - a.margin;
     });
 
-    DOM.arbFeed.innerHTML = html;
+    const displayMatches = loadedMatches.slice(0, 15);
+    DOM.arbFeed.innerHTML = displayMatches.length > 0 ? 
+        displayMatches.map((match, i) => renderArbCard(match, i)).join('') : 
+        '<p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">No matches found. Try scanning again.</p>';
     
-    // Update Ticker
+    // Update Metrics
+    const arbs = loadedMatches.filter(m => m.isArb);
+    const bestMatch = arbs[0];
+    if (DOM.activeArbsCount) {
+        DOM.activeArbsCount.innerText = arbs.length;
+        DOM.activeArbsCount.className = arbs.length > 0 ? "metric-value text-glow-green" : "metric-value";
+    }
+    if (DOM.bestMargin) {
+        DOM.bestMargin.innerText = bestMatch ? bestMatch.margin.toFixed(2) + '%' : '0.00%';
+        DOM.bestMargin.className = bestMatch ? "metric-value text-glow-green" : "metric-value";
+function updateStockyTicker() {
     const tickerEl = document.getElementById('odds-ticker');
     const tickerWrap = document.getElementById('ticker-wrap');
     if (tickerEl && tickerWrap) {
+        const arbs = loadedMatches.filter(m => m.isArb).slice(0, 15);
+        if (arbs.length === 0) {
+            tickerWrap.style.display = 'none';
+            return;
+        }
         tickerWrap.style.display = 'block';
         let tickerHtml = '';
-        
-        // Take up to 15 best matches for the ticker
-        const tickerMatches = loadedMatches.slice(0, 15);
-        
-        tickerMatches.forEach(match => {
+        arbs.forEach(match => {
             let legText = match.legs.map((leg, idx) => {
-                const isUnderdog = idx > 0; // rough heuristic
+                const isUnderdog = idx > 0;
                 return `<span class="ticker-odds ${isUnderdog ? 'underdog' : ''}">${leg.outcome} ${leg.odds.toFixed(2)}</span>`;
             }).join(' <span style="color:#555">|</span> ');
 
@@ -725,22 +736,93 @@ function updateDashboard() {
                 </div>
             `;
         });
-        
-        // Duplicate the html string a few times so the ticker has enough content to scroll infinitely 
-        // without showing a gap before the animation loops
         tickerEl.innerHTML = tickerHtml + tickerHtml + tickerHtml;
     }
+}
 
+function updateActionCenter() {
+    if (!DOM.actionCenter) return;
+    
+    const arbs = loadedMatches.filter(m => m.isArb && m.margin > 0.5);
+    if (arbs.length === 0) {
+        DOM.actionCenter.innerHTML = '';
+        return;
+    }
+
+    const consolidator = {};
+    arbs.forEach(match => {
+        const stakeResult = calculateStakes(match.totalProb, match.legs, 'arb');
+        if (stakeResult.isZeroBalance) {
+            stakeResult.bottlenecks.forEach(b => {
+                if (!consolidator[b.name] || b.needed > consolidator[b.name]) {
+                    consolidator[b.name] = b.needed;
+                }
+            });
+        }
+    });
+
+    const entries = Object.entries(consolidator);
+    if (entries.length === 0) {
+        DOM.actionCenter.innerHTML = '';
+        return;
+    }
+
+    DOM.actionCenter.innerHTML = `
+        <div class="action-center-banner animate-slide-in">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                <div>
+                    <h3 style="margin: 0; color: #ff4444; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; letter-spacing: 0.5px;">
+                        ⚠️ MASTER DEPOSIT CHECKLIST
+                    </h3>
+                    <p style="margin: 0.2rem 0 0 0; font-size: 0.7rem; color: var(--text-secondary);">
+                        Fund these to unlock <strong>${arbs.length}</strong> premium opportunities.
+                    </p>
+                </div>
+                <button onclick="document.getElementById('nav-bankroll').click()" class="primary-btn" style="padding: 4px 10px; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">💰 Fund Accounts</button>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.5rem;">
+                ${entries.map(([name, amount]) => `
+                    <div style="background: rgba(255, 255, 255, 0.03); border-left: 3px solid #ff4444; padding: 6px 10px; border-radius: 4px;">
+                        <div style="font-size: 0.55rem; color: #ff4444; font-weight: bold; text-transform: uppercase;">${name}</div>
+                        <div style="font-size: 0.95rem; font-weight: 700; color: white;">£${amount.toFixed(2)}</div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function updateDashboard() {
+    if (!DOM.arbFeed) return;
+    
+    // Sort loadedMatches: Arbs first, then by margin
+    loadedMatches.sort((a, b) => {
+        if (a.isArb && !b.isArb) return -1;
+        if (!a.isArb && b.isArb) return 1;
+        return b.margin - a.margin;
+    });
+
+    const displayMatches = loadedMatches.slice(0, 15);
+    DOM.arbFeed.innerHTML = displayMatches.length > 0 ? 
+        displayMatches.map((match, i) => renderArbCard(match, i)).join('') : 
+        '<p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">No matches found. Try scanning again.</p>';
+    
     // Update Metrics
-    DOM.activeArbsCount.innerText = arbCount;
-    DOM.activeArbsCount.className = arbCount > 0 ? "metric-value text-glow-green" : "metric-value";
-    
-    // Best margin is the first item after sorting
-    const bestMatch = loadedMatches[0];
-    DOM.bestMargin.innerText = bestMatch ? bestMatch.margin.toFixed(2) + '%' : '0.00%';
-    DOM.bestMargin.className = (bestMatch && bestMatch.isArb) ? "metric-value text-glow-green" : "metric-value";
-    
+    const arbs = loadedMatches.filter(m => m.isArb);
+    const bestMatch = arbs[0];
+    if (DOM.activeArbsCount) {
+        DOM.activeArbsCount.innerText = arbs.length;
+        DOM.activeArbsCount.className = arbs.length > 0 ? "metric-value text-glow-green" : "metric-value";
+    }
+    if (DOM.bestMargin) {
+        DOM.bestMargin.innerText = bestMatch ? bestMatch.margin.toFixed(2) + '%' : '0.00%';
+        DOM.bestMargin.className = bestMatch ? "metric-value text-glow-green" : "metric-value";
+    }
+
     DOM.statusText.innerHTML = '<span class="dot" style="background:var(--accent-green);"></span> Scan Complete';
+    
+    updateActionCenter();
+    updateStockyTicker();
     updateRebalancer();
 }
 

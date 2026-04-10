@@ -39,10 +39,9 @@ function calculateStakes(totalProb, legs, strategy = 'arb') {
     // Fixed Baseline as per user request (£10)
     const fixedBaseline = 10;
     
-    // Check if user has enough balance (purely for the warning, does not affect stakes)
+    // Track all bottlenecks
+    const bottlenecks = [];
     let isZeroBalance = false;
-    let bottleneckBookie = '';
-    let depositNeeded = 0;
 
     legs.forEach((leg, idx) => {
         const cb = cleanBookie(leg.bookmaker);
@@ -51,21 +50,20 @@ function calculateStakes(totalProb, legs, strategy = 'arb') {
         
         if (balance < required) {
             isZeroBalance = true;
-            if (!bottleneckBookie || (required - balance) > depositNeeded) {
-                bottleneckBookie = cb;
-                depositNeeded = required - balance;
-            }
+            bottlenecks.push({
+                name: cb.toUpperCase(),
+                needed: required - balance
+            });
         }
     });
 
     return {
         isZeroBalance,
-        bottleneckBookie,
-        depositNeeded,
+        bottlenecks,
         idealInvestment: fixedBaseline,
         stakedLegs: legs.map((leg, idx) => ({
             ...leg,
-            actualStake: fixedBaseline * fractions[idx], // Now "Actual" and "Ideal" are the same £10
+            actualStake: fixedBaseline * fractions[idx],
             idealStake: fixedBaseline * fractions[idx]
         }))
     };
@@ -462,7 +460,17 @@ async function fetchLiveArbs() {
                 // ONLY PUSH IF MARGIN IS DECENT (> 0.05%) TO AVOID "0 WINNING" SUGGESTIONS
                 if (bestMultiMargin > 0.05) {
                     const calc = calculateArbitrage(bestMultiLegs);
-                    
+                                        
+                    // Auto-Discovery: Add new bookies to the bankroll system
+                    game.bookmakers.forEach(bk => {
+                        const cb = cleanBookie(bk.title);
+                        if (bookieBalances[cb] === undefined) {
+                            bookieBalances[cb] = 0;
+                            // Default to EU if not in UK list
+                            if (!BOOKIE_REGIONS[cb]) BOOKIE_REGIONS[cb] = 'EU';
+                        }
+                    });
+
                     // Capture Full Market Mapping for "Market Depth" feature
                     const fullMarket = [];
                     // Get all supported bookies from our search list
@@ -567,7 +575,7 @@ function renderArbCard(match, index, strategy = 'arb') {
                 </div>
                 <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-top: 4px;">
                     <span style="color: var(--text-secondary);">If Wins:</span>
-                    <span style="color: var(--accent-green); font-weight: bold;">${formatCurrency(leg.stake * leg.odds)}</span>
+                    <span style="color: var(--accent-green); font-weight: bold;">${formatCurrency((useIdeal ? leg.idealStake : leg.actualStake) * leg.odds)}</span>
                 </div>
                 <div style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--text-secondary); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 4px;">
                     Kelly: ${k.kellyPercent}% | True Prob: ${( (1/leg.odds)/match.totalProb * 100).toFixed(0)}%
@@ -600,7 +608,11 @@ function renderArbCard(match, index, strategy = 'arb') {
                 <button class="strat-btn ${strategy === 'under' ? 'active' : ''}" onclick="updateMatchStrategy('${match.id}', 'under')">Under-Hedge</button>
             </div>
 
-            ${isZeroBalance ? `<div style="background: rgba(255, 68, 68, 0.1); color: #ff4444; padding: 0.5rem; text-align: center; font-size: 0.8rem; font-weight: bold; border-top: 1px solid rgba(255, 68, 68, 0.3);">⚠️ Deposit £${stakeResult.depositNeeded.toFixed(2)} into ${stakeResult.bottleneckBookie.toUpperCase()} to activate this Arb</div>` : ''}
+            ${isZeroBalance ? `
+                <div style="background: rgba(255, 68, 68, 0.1); color: #ff4444; padding: 0.5rem; text-align: center; font-size: 0.75rem; font-weight: bold; border-top: 1px solid rgba(255, 68, 68, 0.3);">
+                    ⚠️ Deposit Needed: ${stakeResult.bottlenecks.map(b => `£${b.needed.toFixed(2)} into ${b.name}`).join(', ')}
+                </div>
+            ` : ''}
 
             <div class="arb-body" style="grid-template-columns: repeat(${match.legs.length}, 1fr);">
                 ${legsHtml}

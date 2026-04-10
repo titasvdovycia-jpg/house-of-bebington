@@ -238,9 +238,14 @@ async function fetchLiveArbs() {
             // Convert map to array of legs
             const legs = Object.values(bestOdds);
             
-            // Only consider games where we found odds for all sides (usually 2 or 3 way ML)
+            // Only consider games where we found odds for all sides
             if (legs.length >= 2) {
                 const calc = calculateArbitrage(legs);
+                
+                // TWO-BOOKIE RULE: Count unique bookmakers
+                const uniqueBookies = new Set(legs.map(l => l.bookmaker));
+                const hasVariety = uniqueBookies.size > 1;
+
                 matches.push({
                     id: game.id,
                     sport: game.sport_title,
@@ -249,13 +254,20 @@ async function fetchLiveArbs() {
                     legs: legs,
                     margin: calc.margin,
                     totalProb: calc.totalProb,
-                    isArb: calc.isArb
+                    isArb: calc.isArb && hasVariety, // Only TRUE Arb if from different houses
+                    hasVariety: hasVariety
                 });
             }
         });
 
-        // Sort dynamically: Highest margin first
-        matches.sort((a, b) => b.margin - a.margin);
+        // SORTING: 
+        // 1. Genuine Arbs (Different bookies) first, highest margin
+        // 2. High margin single-bookie (non-arbs) second
+        matches.sort((a, b) => {
+            if (a.isArb && !b.isArb) return -1;
+            if (!a.isArb && b.isArb) return 1;
+            return b.margin - a.margin;
+        });
         
         loadedMatches = matches.slice(0, 50); // Keep top 50
         updateDashboard();

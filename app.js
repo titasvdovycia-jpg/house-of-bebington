@@ -54,16 +54,26 @@ function calculateStakes(totalProb, legs, strategy = 'arb') {
         }
     });
 
-    // If max is 0, they have no money in at least one required account.
-    // We return stakes as 0, but we can pass back a flag.
+    // Theoretical Baseline (Ideal)
+    const idealBaseline = 100;
     const isZeroBalance = maxTotalInvestment === 0;
+    
+    // Calculate how much is missing for the bottleneck bookie to reach the ideal baseline
+    let depositNeeded = 0;
+    if (isZeroBalance && bottleneckBookie) {
+        const idx = legs.findIndex(l => cleanBookie(l.bookmaker) === bottleneckBookie);
+        depositNeeded = idealBaseline * fractions[idx];
+    }
 
     return {
         isZeroBalance,
         bottleneckBookie,
+        depositNeeded,
+        idealInvestment: idealBaseline,
         stakedLegs: legs.map((leg, idx) => ({
             ...leg,
-            stake: maxTotalInvestment * fractions[idx]
+            actualStake: maxTotalInvestment * fractions[idx],
+            idealStake: idealBaseline * fractions[idx]
         }))
     };
 }
@@ -518,12 +528,15 @@ function renderArbCard(match, index, strategy = 'arb') {
     const stakeResult = calculateStakes(match.totalProb, match.legs, strategy);
     const stakedLegs = stakeResult.stakedLegs;
     const isZeroBalance = stakeResult.isZeroBalance;
-    const kellyInfo = calculateKelly(match);
+    
+    // Logic: If actual stake is 0, show IDEAL values but dimmed
+    const useIdeal = isZeroBalance;
     
     // Calculate total investment and returns
-    const totalInvestment = stakedLegs.reduce((sum, l) => sum + l.stake, 0);
-    const guaranteedReturn = stakedLegs[0].stake * stakedLegs[0].odds;
+    const totalInvestment = useIdeal ? stakeResult.idealInvestment : stakedLegs.reduce((sum, l) => sum + l.actualStake, 0);
+    const guaranteedReturn = useIdeal ? (stakedLegs[0].idealStake * stakedLegs[0].odds) : (stakedLegs[0].actualStake * stakedLegs[0].odds);
     const profit = guaranteedReturn - totalInvestment;
+    const kellyInfo = calculateKelly(match);
 
     let legsHtml = '';
     const mainTeam = match.matchup.split(' vs ')[0]; // Use first team for search
@@ -545,9 +558,9 @@ function renderArbCard(match, index, strategy = 'arb') {
                     </div>
                     <div class="leg-odds">${formatOdds(leg.odds)}</div>
                 </div>
-                <div class="leg-bet-amount">
-                    <span class="bet-label">Stake</span>
-                    <span class="bet-value">${formatCurrency(leg.stake)}</span>
+                <div class="leg-bet-amount" style="${useIdeal ? 'opacity: 0.5; font-style: italic;' : ''}">
+                    <span class="bet-label">${useIdeal ? 'Ideal' : 'Stake'}</span>
+                    <span class="bet-value">${formatCurrency(useIdeal ? leg.idealStake : leg.actualStake)}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-top: 4px;">
                     <span style="color: var(--text-secondary);">If Wins:</span>
@@ -584,7 +597,7 @@ function renderArbCard(match, index, strategy = 'arb') {
                 <button class="strat-btn ${strategy === 'under' ? 'active' : ''}" onclick="updateMatchStrategy('${match.id}', 'under')">Under-Hedge</button>
             </div>
 
-            ${isZeroBalance ? `<div style="background: rgba(255, 68, 68, 0.1); color: #ff4444; padding: 0.5rem; text-align: center; font-size: 0.8rem; font-weight: bold; border-top: 1px solid rgba(255, 68, 68, 0.3);">⚠️ Deposit Required in ${stakeResult.bottleneckBookie.toUpperCase()}</div>` : ''}
+            ${isZeroBalance ? `<div style="background: rgba(255, 68, 68, 0.1); color: #ff4444; padding: 0.5rem; text-align: center; font-size: 0.8rem; font-weight: bold; border-top: 1px solid rgba(255, 68, 68, 0.3);">⚠️ Deposit £${stakeResult.depositNeeded.toFixed(2)} into ${stakeResult.bottleneckBookie.toUpperCase()} to activate this Arb</div>` : ''}
 
             <div class="arb-body" style="grid-template-columns: repeat(${match.legs.length}, 1fr);">
                 ${legsHtml}
@@ -784,17 +797,17 @@ function logBet(matchId, strategy) {
 
     const stakeResult = calculateStakes(match.totalProb, match.legs, strategy);
     if (stakeResult.isZeroBalance) {
-        alert("Insufficient funds! Please deposit into " + stakeResult.bottleneckBookie.toUpperCase());
+        alert(`❌ Insufficient Funds!\n\nYou must deposit £${stakeResult.depositNeeded.toFixed(2)} into ${stakeResult.bottleneckBookie.toUpperCase()} before this bet can be placed and logged.`);
         return;
     }
 
     const stakes = stakeResult.stakedLegs;
-    const guaranteedReturn = (stakes[0].stake * stakes[0].odds);
+    const guaranteedReturn = (stakes[0].actualStake * stakes[0].odds);
     
     // Deduct from bookmaker balances
     stakes.forEach(leg => {
         const cb = cleanBookie(leg.bookmaker);
-        bookieBalances[cb] -= leg.stake;
+        bookieBalances[cb] -= leg.actualStake;
     });
     localStorage.setItem('arb_bookie_balances', JSON.stringify(bookieBalances));
 
@@ -804,8 +817,8 @@ function logBet(matchId, strategy) {
         commence_time: match.time, // For smart auto-settle later
         matchup: match.matchup,
         sport: match.sport,
-        legs: stakes,
-        totalStake: stakes.reduce((sum, l) => sum + l.stake, 0),
+        legs: stakes.map(s => ({ ...s, stake: s.actualStake })), // Keep 'stake' key for history consistency
+        totalStake: stakes.reduce((sum, l) => sum + l.actualStake, 0),
         possibleReturn: guaranteedReturn,
         strategy: strategy,
         status: 'pending'
@@ -814,7 +827,7 @@ function logBet(matchId, strategy) {
     betHistory.unshift(newBet);
     localStorage.setItem('arb_bet_history', JSON.stringify(betHistory));
     
-    alert("Bet Logged! Bankroll balances deducted. Check Portfolio.");
+    alert("✅ Bet Logged! Bankroll balances deducted. Check Portfolio.");
     updatePortfolio();
     updateBankrollUI();
     updateDashboard(); // Refresh cards to show new limits

@@ -20,6 +20,7 @@
 
   --transition-fast: 0.15s ease-out;
   --transition-smooth: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --stocky-speed: 180s;
 }
 
 * {
@@ -687,7 +688,7 @@ body {
 .ticker {
     display: inline-flex;
     white-space: nowrap;
-    animation: ticker 90s linear infinite;
+    animation: ticker var(--stocky-speed) linear infinite;
 }
 
 .ticker:hover {
@@ -769,4 +770,28 @@ body {
 
 #master-reset-btn:hover {
     filter: brightness(1.2);
+}
+
+/* Toast Notifications */
+.flash-toast {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: linear-gradient(135, var(--accent-blue), #0055ff);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    box-shadow: 0 10px 30px rgba(0, 184, 255, 0.4);
+    z-index: 10000;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.flash-toast.visible {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
 }

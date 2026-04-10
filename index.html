@@ -19,6 +19,7 @@
       </div>
       <nav class="nav-links">
         <button id="nav-dashboard" class="nav-btn active">Dashboard</button>
+        <button id="nav-portfolio" class="nav-btn">Portfolio</button>
         <button id="nav-settings" class="nav-btn">Settings</button>
       </nav>
     </header>
@@ -56,6 +57,48 @@
       <div class="arb-feed" id="arb-feed">
         <!-- JS will populate cards here -->
         <p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">Click "Scan Live Markets" to fetch odds from UK Bookmakers.</p>
+      </div>
+    </main>
+
+    </main>
+    
+    <!-- Portfolio View -->
+    <main class="dashboard" id="view-portfolio" style="display: none;">
+      <div class="metrics-panel">
+        <div class="metric-card">
+          <p class="metric-label">Total Net Profit</p>
+          <h2 class="metric-value" id="port-total-profit">£0.00</h2>
+        </div>
+        <div class="metric-card">
+          <p class="metric-label">Return on Investment</p>
+          <h2 class="metric-value" id="port-roi">0.00%</h2>
+        </div>
+        <div class="metric-card">
+          <p class="metric-label">Active Bets</p>
+          <h2 class="metric-value" id="port-active-bets">0</h2>
+        </div>
+      </div>
+
+      <div class="settings-card" style="max-width: 100%; width: 100%;">
+        <h3>Bet History</h3>
+        <div style="overflow-x: auto; margin-top: 1rem;">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Match</th>
+                <th>Market</th>
+                <th>Stake</th>
+                <th>Return</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="bet-history-table">
+              <!-- JS will populate -->
+            </tbody>
+          </table>
+        </div>
       </div>
     </main>
 

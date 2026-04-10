@@ -594,3 +594,26 @@ body {
     color: var(--accent-blue);
     background: rgba(0, 184, 255, 0.05);
 }
+
+.quick-jump-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    background: var(--accent-blue);
+    color: black;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    text-decoration: none;
+    margin-left: 6px;
+    font-weight: 800;
+    line-height: 1;
+    transition: transform 0.2s, background 0.2s;
+    vertical-align: middle;
+}
+
+.quick-jump-link:hover {
+    transform: scale(1.2);
+    background: var(--accent-green);
+}

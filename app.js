@@ -201,7 +201,11 @@ const DOM = {
     healthStatusText: document.getElementById('health-status-text'),
     healthProgress: document.getElementById('health-progress'),
     tokenUsageInfo: document.getElementById('token-usage-info'),
-    tokenDaysInfo: document.getElementById('token-days-info')
+    tokenDaysInfo: document.getElementById('token-days-info'),
+    
+    // Nuclear & Rebalance
+    masterResetBtn: document.getElementById('master-reset-btn'),
+    rebalanceSuggestions: document.getElementById('rebalance-suggestions')
 };
 
 // --- Telegram Logic ---
@@ -654,6 +658,7 @@ function updateDashboard() {
     DOM.bestMargin.className = (bestMatch && bestMatch.isArb) ? "metric-value text-glow-green" : "metric-value";
     
     DOM.statusText.innerHTML = '<span class="dot" style="background:var(--accent-green);"></span> Scan Complete';
+    updateRebalancer();
 }
 
 // --- Navigation & Events ---
@@ -751,6 +756,39 @@ function logBet(matchId, strategy) {
     updatePortfolio();
     updateBankrollUI();
     updateDashboard(); // Refresh cards to show new limits
+}
+
+function updateRebalancer() {
+    if (!DOM.rebalanceSuggestions) return;
+    
+    const balances = Object.entries(bookieBalances);
+    const lowFunds = balances.filter(([name, bal]) => bal < 5).map(([name]) => name);
+    const highFunds = balances.filter(([name, bal]) => bal > 50).sort((a, b) => b[1] - a[1]);
+
+    if (lowFunds.length === 0) {
+        DOM.rebalanceSuggestions.innerHTML = '<p style="color: var(--accent-green); font-size: 0.8rem;">✅ All accounts liquid. No rebalancing needed.</p>';
+        return;
+    }
+
+    if (highFunds.length === 0) {
+        DOM.rebalanceSuggestions.innerHTML = '<p style="color: #ffaa44; font-size: 0.8rem;">⚠️ Low liquidity across all accounts. Suggest adding fresh capital.</p>';
+        return;
+    }
+
+    let html = '';
+    lowFunds.forEach(target => {
+        const source = highFunds[0]; // Take top source
+        const amount = (source[1] * 0.5).toFixed(2);
+        html += `
+            <div style="background: rgba(255,255,255,0.03); padding: 0.75rem; border-left: 3px solid var(--accent-blue); border-radius: 4px;">
+                <div style="font-size: 0.85rem; margin-bottom: 4px;">🎯 <strong>${target.toUpperCase()}</strong> is depleted.</div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                    Suggestion: Move <strong>£${amount}</strong> from ${source[0].toUpperCase()} (£${source[1].toFixed(2)} available).
+                </div>
+            </div>
+        `;
+    });
+    DOM.rebalanceSuggestions.innerHTML = html;
 }
 
 function deleteBet(id) {
@@ -933,6 +971,7 @@ function updateBankrollUI() {
         `;
     });
     DOM.bookieBalancesGrid.innerHTML = gridHtml;
+    updateRebalancer();
 }
 
 window.updateCustomBalance = function(bookie, val) {
@@ -992,6 +1031,14 @@ DOM.saveSettingsBtn.addEventListener('click', () => {
 });
 
 DOM.findIdBtn.addEventListener('click', findChatId);
+
+DOM.masterResetBtn.addEventListener('click', () => {
+    if (confirm("🚨 WARNING: This will permanently delete your API keys, bankroll balances, and betting history. Are you absolutely sure?")) {
+        localStorage.clear();
+        alert("System Purged. Reloading to factory default...");
+        location.reload();
+    }
+});
 
 DOM.autoScanToggle.addEventListener('change', (e) => {
     updateTokenHealth();
@@ -1221,4 +1268,33 @@ async function autoResolveBets() {
 async function sendTelegramSettlement(bet, result, winningLegIndex) {
     if (!tgToken || !tgChatId) return;
     
-    let reportText 
+    let reportText = `✅ *Bet Settled Automatically!*\n\n`;
+    reportText += `Match: ${bet.matchup}\n`;
+    
+    if (result === 'won') {
+        const winningLeg = bet.legs[winningLegIndex];
+        const payout = winningLeg.stake * winningLeg.odds;
+        const netProfit = payout - bet.totalStake;
+        const cb = cleanBookie(winningLeg.bookmaker);
+        const newBalance = bookieBalances[cb];
+        
+        reportText += `Winner: ${winningLeg.outcome}\n`;
+        reportText += `Net Profit: +£${netProfit.toFixed(2)}\n`;
+        reportText += `Funds injected into: *${winningLeg.bookmaker}*\n\n`;
+        reportText += `💡 *Rebalancing Advice*: Your ${winningLeg.bookmaker} balance is now £${newBalance.toFixed(2)}. Suggestion: Withdraw £${(payout * 0.75).toFixed(2)} to your bank module to top up heavily depleted accounts.`;
+    }
+
+    let cleanToken = tgToken.replace(/[^a-zA-Z0-9:\-_]/g, '');
+    let cleanChat = tgChatId.replace(/[^0-9\-]/g, '');
+    if (cleanToken.toLowerCase().startsWith('bot')) cleanToken = cleanToken.substring(3);
+
+    const telegramUrl = `https://api.telegram.org/bot${cleanToken}/sendMessage?chat_id=${cleanChat}&text=${encodeURIComponent(reportText)}&parse_mode=Markdown`;
+    fetch(telegramUrl).catch(e => console.error(e));
+}
+
+// Inject AutoSettle to safeAutoScan to let it run passively efficiently
+const originalSafeAutoScan = safeAutoScan;
+safeAutoScan = function() {
+    originalSafeAutoScan();
+    autoResolveBets();
+}

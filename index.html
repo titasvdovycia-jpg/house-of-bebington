@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="Automated Hedge and Arbitrage Betting Scanner. Find guaranteed profitable betting opportunities."/>
+  <title>House of Bebington</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-container">
+    <header class="navbar">
+      <div class="logo">
+        <span class="logo-icon">▲</span>
+        <h1>House of <span class="highlight">Bebington</span></h1>
+      </div>
+      <nav class="nav-links">
+        <button id="nav-dashboard" class="nav-btn active">Dashboard</button>
+        <button id="nav-settings" class="nav-btn">Settings</button>
+      </nav>
+    </header>
+
+    <!-- Main Dashboard View -->
+    <main class="dashboard" id="view-dashboard">
+      <div class="metrics-panel">
+        <div class="metric-card">
+          <p class="metric-label">Active Arbs Found</p>
+          <h2 class="metric-value text-glow-green" id="active-arbs-count">-</h2>
+        </div>
+        <div class="metric-card">
+          <p class="metric-label">Best Profit Margin</p>
+          <h2 class="metric-value text-glow-blue" id="best-margin">0.00%</h2>
+        </div>
+        <div class="metric-card" style="align-items: flex-end;">
+          <p class="metric-label">Global Bankroll</p>
+          <div class="input-wrapper">
+             <span class="currency-symbol">£</span>
+             <input type="number" id="global-bankroll" value="1000" />
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-bar">
+        <p class="status-indicator" id="status-text"><span class="dot pulse"></span> Ready to scan...</p>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: var(--text-secondary); cursor: pointer;">
+                <input type="checkbox" id="auto-scan-toggle" /> Auto-Scan (Safe: 2hr)
+            </label>
+            <button id="refresh-btn" class="primary-btn">Scan Live Markets</button>
+        </div>
+      </div>
+
+      <div class="arb-feed" id="arb-feed">
+        <!-- JS will populate cards here -->
+        <p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">Click "Scan Live Markets" to fetch odds from UK Bookmakers.</p>
+      </div>
+    </main>
+
+    <!-- Settings View -->
+    <main class="settings-view" id="view-settings" style="display: none;">
+      <div class="settings-card">
+        <h2>Configuration</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.875rem;">Configure your data provider details here. Your API key is stored locally in your browser and never sent anywhere else.</p>
+        
+        <div class="form-group">
+          <label for="api-key-input">The Odds API Key</label>
+          <div class="input-wrapper" style="margin-top: 0;">
+            <input type="password" id="api-key-input" placeholder="Enter your 32-character API key" style="width: 100%; font-family: var(--font-mono); padding-left: 1rem;" />
+          </div>
+          <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.5rem;">Targeting `regions=uk` and `markets=h2h`.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="tg-token">Telegram Bot Token (Optional)</label>
+          <div class="input-wrapper" style="margin-top: 0;">
+            <input type="text" id="tg-token" placeholder="e.g. 123456:ABC-DEF1234ghIkl-zyx" style="width: 100%; font-family: var(--font-mono); padding-left: 1rem;" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="tg-chat-id">Telegram Chat ID (Optional)</label>
+          <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
+            <div class="input-wrapper" style="margin-top: 0; flex-grow: 1;">
+              <input type="text" id="tg-chat-id" placeholder="e.g. 123456789" style="width: 100%; font-family: var(--font-mono); padding-left: 1rem;" />
+            </div>
+            <button id="find-id-btn" class="secondary-btn" style="padding: 10px 15px; background: rgba(0, 243, 255, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); cursor: pointer; border-radius: 8px; font-weight: 600; font-size: 0.75rem;">Find My ID</button>
+          </div>
+          <p id="find-id-status" style="color: var(--text-secondary); font-size: 0.7rem; margin-top: 0.5rem;"></p>
+        </div>
+
+        <button id="save-settings-btn" class="primary-btn" style="margin-top: 1rem;">Save Settings</button>
+
+        <div class="form-group" style="margin-top: 2.5rem; border-top: 1px solid var(--border-color); padding-top: 2rem;">
+          <label>Sports Coverage</label>
+          <p style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 1rem;">Select the sports you want to scan. More sports = faster token consumption.</p>
+          
+          <div class="sports-grid" id="sports-selection-grid">
+            <!-- Programmatically populated for better management -->
+          </div>
+
+          <div class="token-meter">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.825rem; font-weight: 600;">Monthly Token Drain</span>
+              <span id="health-status-text" class="health-status-text safe">Safe</span>
+            </div>
+            <div class="token-health-bar">
+              <div id="health-progress" class="health-progress" style="width: 20%; background: var(--accent-green);"></div>
+            </div>
+            <div class="token-stats">
+              <span id="token-usage-info">Using 0 tokens/month</span>
+              <span id="token-days-info">500 tokens will last 31 days</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

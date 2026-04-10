@@ -997,25 +997,29 @@ window.removeBlacklist = function(bookie) {
     renderBlacklist();
 }
 
-DOM.addBlacklistBtn.addEventListener('click', () => {
-    const val = DOM.blacklistInput.value.trim().toLowerCase();
-    if (val && !systemBlacklist.includes(val)) {
-        systemBlacklist.push(val);
-        localStorage.setItem('arb_blacklist', JSON.stringify(systemBlacklist));
-        DOM.blacklistInput.value = '';
-        renderBlacklist();
-    }
-});
+if (DOM.addBlacklistBtn) {
+    DOM.addBlacklistBtn.addEventListener('click', () => {
+        const val = DOM.blacklistInput.value.trim().toLowerCase();
+        if (val && !systemBlacklist.includes(val)) {
+            systemBlacklist.push(val);
+            localStorage.setItem('arb_blacklist', JSON.stringify(systemBlacklist));
+            DOM.blacklistInput.value = '';
+            renderBlacklist();
+        }
+    });
+}
 
-DOM.navSettings.addEventListener('click', () => {
-    DOM.navSettings.classList.add('active');
-    DOM.navDashboard.classList.remove('active');
-    DOM.viewDashboard.style.display = 'none';
-    DOM.viewSettings.style.display = 'flex';
-    DOM.apiKeyInput.value = apiKey; // Show current key
-    DOM.tgTokenInput.value = tgToken;
-    DOM.tgChatIdInput.value = tgChatId;
-});
+if (DOM.navSettings) {
+    DOM.navSettings.addEventListener('click', () => {
+        DOM.navSettings.classList.add('active');
+        if (DOM.navDashboard) DOM.navDashboard.classList.remove('active');
+        if (DOM.viewDashboard) DOM.viewDashboard.style.display = 'none';
+        if (DOM.viewSettings) DOM.viewSettings.style.display = 'flex';
+        if (DOM.apiKeyInput) DOM.apiKeyInput.value = apiKey; // Show current key
+        if (DOM.tgTokenInput) DOM.tgTokenInput.value = tgToken;
+        if (DOM.tgChatIdInput) DOM.tgChatIdInput.value = tgChatId;
+    });
+}
 
 DOM.saveSettingsBtn.addEventListener('click', () => {
     apiKey = DOM.apiKeyInput.value.trim();
@@ -1032,13 +1036,15 @@ DOM.saveSettingsBtn.addEventListener('click', () => {
 
 DOM.findIdBtn.addEventListener('click', findChatId);
 
-DOM.masterResetBtn.addEventListener('click', () => {
-    if (confirm("🚨 WARNING: This will permanently delete your API keys, bankroll balances, and betting history. Are you absolutely sure?")) {
-        localStorage.clear();
-        alert("System Purged. Reloading to factory default...");
-        location.reload();
-    }
-});
+if (DOM.masterResetBtn) {
+    DOM.masterResetBtn.addEventListener('click', () => {
+        if (confirm("🚨 WARNING: This will permanently delete your API keys, bankroll balances, and betting history. Are you absolutely sure?")) {
+            localStorage.clear();
+            alert("System Purged. Reloading to factory default...");
+            location.reload();
+        }
+    });
+}
 
 DOM.autoScanToggle.addEventListener('change', (e) => {
     updateTokenHealth();

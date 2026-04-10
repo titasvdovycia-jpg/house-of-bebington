@@ -244,22 +244,130 @@ function logBet(matchId, strategy) {
     const match = loadedMatches.find(m => m.id === matchId); if (!match) return;
     const sr = calculateStakes(match.totalProb, match.legs, strategy);
     if (sr.isZeroBalance) { alert("❌ Deposit first!"); return; }
-    sr.stakedLegs.forEach(l => bookieBalances[cleanBookie(l.bookmaker)] -= l.actualStake);
-    betHistory.unshift({ id: Date.now(), date: new Date().toLocaleDateString(), commence_time: match.time, matchup: match.matchup, sport: match.sport, legs: sr.stakedLegs.map(s => ({ ...s, stake: s.actualStake })), totalStake: FIXED_STAKE, possibleReturn: sr.stakedLegs[0].actualStake * sr.stakedLegs[0].odds, status: 'pending' });
-    localStorage.setItem('arb_bookie_balances', JSON.stringify(bookieBalances)); localStorage.setItem('arb_bet_history', JSON.stringify(betHistory));
+    
+    sr.stakedLegs.forEach(l => {
+        const cb = cleanBookie(l.bookmaker);
+        bookieBalances[cb] -= l.actualStake;
+    });
+
+    const guaranteedReturn = (sr.stakedLegs[0].actualStake * sr.stakedLegs[0].odds);
+
+    betHistory.unshift({ 
+        id: Date.now(), 
+        date: new Date().toLocaleDateString(), 
+        commence_time: match.time, 
+        matchup: match.matchup, 
+        sport: match.sport, 
+        legs: sr.stakedLegs.map(s => ({ ...s, stake: s.actualStake })), 
+        totalStake: FIXED_STAKE, 
+        possibleReturn: guaranteedReturn, 
+        status: 'pending' 
+    });
+
+    localStorage.setItem('arb_bookie_balances', JSON.stringify(bookieBalances)); 
+    localStorage.setItem('arb_bet_history', JSON.stringify(betHistory));
+    
     updatePortfolio(); updateBankrollUI(); updateDashboard();
+    alert("✅ Bet Logged! Balance deducted.");
+}
+
+window.settleBet = (id, result, winningLegIndex = null) => {
+    const bet = betHistory.find(b => b.id === id);
+    if (!bet || bet.status !== 'pending') return;
+
+    bet.status = result;
+    if (result === 'won') {
+        const winningLeg = winningLegIndex !== null ? bet.legs[winningLegIndex] : bet.legs[0];
+        const payout = winningLeg.stake * winningLeg.odds;
+        const cb = cleanBookie(winningLeg.bookmaker);
+        bookieBalances[cb] = (bookieBalances[cb] || 0) + payout;
+        
+        sendTelegramSettlement(bet, payout, winningLeg.bookmaker);
+    }
+
+    localStorage.setItem('arb_bookie_balances', JSON.stringify(bookieBalances));
+    localStorage.setItem('arb_bet_history', JSON.stringify(betHistory));
+    
+    updatePortfolio(); updateBankrollUI(); updateDashboard();
+};
+
+function sendTelegramSettlement(bet, payout, bookmaker) {
+    if (!tgToken || !tgChatId) return;
+    const msg = `💰 *HOE Settlement*\n\nMatch: ${bet.matchup}\nResult: WON (+£${(payout - bet.totalStake).toFixed(2)})\nBookmaker: ${bookmaker}\nBalance Updated.`;
+    fetch(`https://api.telegram.org/bot${tgToken}/sendMessage?chat_id=${tgChatId}&text=${encodeURIComponent(msg)}&parse_mode=Markdown`).catch(e => console.error(e));
 }
 
 function updateBankrollUI() {
-    const br = getGlobalBankroll(); DOM.bankrollAvailable.innerText = formatCurrency(br.available); DOM.bankrollLocked.innerText = formatCurrency(br.locked); DOM.bankrollGlobal.innerText = formatCurrency(br.total);
+    const br = getGlobalBankroll(); 
+    if (DOM.bankrollAvailable) DOM.bankrollAvailable.innerText = formatCurrency(br.available); 
+    if (DOM.bankrollLocked) DOM.bankrollLocked.innerText = formatCurrency(br.locked); 
+    if (DOM.bankrollGlobal) DOM.bankrollGlobal.innerText = formatCurrency(br.total);
+    
     const sorted = Object.keys(BOOKIE_SEARCH_URLS).sort((a,b) => (BOOKIE_REGIONS[a]==='UK'?-1:1) || a.localeCompare(b));
-    DOM.bookieBalancesGrid.innerHTML = sorted.map(b => `<div class="bookie-balance-card"><h4>${b.toUpperCase()}</h4><input type="number" value="${(bookieBalances[b]||0).toFixed(2)}" onchange="updateCustomBalance('${b}', this.value)" /></div>`).join('');
+    DOM.bookieBalancesGrid.innerHTML = sorted.map(b => {
+        const region = BOOKIE_REGIONS[b] || 'EU';
+        const url = BOOKIE_SEARCH_URLS[b]?.split('search')[0];
+        return `
+            <div class="bookie-balance-card">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <span style="font-size: 0.6rem; color: var(--accent-blue); font-weight: bold; border: 1px solid var(--accent-blue-dim); padding: 1px 4px; border-radius: 4px;">${region}</span>
+                    <a href="${url}" target="_blank" style="text-decoration: none; font-size: 0.8rem;">🔗</a>
+                </div>
+                <h4 style="margin: 4px 0;">${b.toUpperCase()}</h4>
+                <div class="input-wrapper" style="margin-top: 4px;">
+                    <span class="currency-symbol">£</span>
+                    <input type="number" value="${(bookieBalances[b]||0).toFixed(2)}" onchange="updateCustomBalance('${b}', this.value)" style="width: 100%; border: none; background: transparent; color: white;" />
+                </div>
+            </div>
+        `;
+    }).join('');
     updateRebalancer();
 }
 window.updateCustomBalance = (b, v) => { bookieBalances[b] = parseFloat(v) || 0; localStorage.setItem('arb_bookie_balances', JSON.stringify(bookieBalances)); updateBankrollUI(); };
 
 function updatePortfolio() {
-    DOM.betHistoryTable.innerHTML = betHistory.map(b => `<tr><td>${b.date}</td><td>${b.matchup}</td><td>${b.legs.length}-Way</td><td>${formatCurrency(b.totalStake)}</td><td>${formatCurrency(b.possibleReturn)}</td><td>${b.status}</td><td><button onclick="deleteBet(${b.id})">🗑️</button></td></tr>`).join('');
+    const table = DOM.betHistoryTable;
+    if (!table) return;
+
+    let totalProfit = 0;
+    let totalStaked = 0;
+    let activeCount = 0;
+
+    table.innerHTML = betHistory.map(b => {
+        if (b.status === 'pending') activeCount++;
+        if (b.status === 'won') totalProfit += (b.possibleReturn - b.totalStake);
+        if (b.status === 'lost') totalProfit -= b.totalStake;
+        totalStaked += b.totalStake;
+
+        const isPending = b.status === 'pending';
+        const profitColor = b.status === 'won' ? 'var(--accent-green)' : (b.status === 'lost' ? '#ff4444' : 'inherit');
+
+        return `
+            <tr>
+                <td>${b.date}</td>
+                <td style="font-size: 0.8rem;"><strong>${b.matchup}</strong><br><small>${b.sport}</small></td>
+                <td>${b.legs.length}-Way</td>
+                <td>${formatCurrency(b.totalStake)}</td>
+                <td style="color: ${profitColor}">${formatCurrency(b.possibleReturn)}</td>
+                <td><span class="status-badge" style="background: ${isPending ? 'var(--accent-blue-dim)' : (b.status === 'won' ? 'var(--accent-green-dim)' : 'rgba(255,68,68,0.1)')}">${b.status}</span></td>
+                <td>
+                    <div style="display: flex; gap: 4px;">
+                        ${isPending ? `
+                            <button class="settle-btn" onclick="settleBet(${b.id}, 'won')" style="background: var(--accent-green); color: black; font-size: 0.6rem; padding: 2px 4px;">WON</button>
+                            <button class="settle-btn" onclick="settleBet(${b.id}, 'lost')" style="background: #444; color: white; font-size: 0.6rem; padding: 2px 4px;">LOST</button>
+                        ` : ''}
+                        <button onclick="deleteBet(${b.id})" style="background: transparent; border: none; cursor: pointer; opacity: 0.5;">🗑️</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    if (DOM.portTotalProfit) DOM.portTotalProfit.innerText = formatCurrency(totalProfit);
+    if (DOM.portActiveBets) DOM.portActiveBets.innerText = activeCount;
+    if (DOM.portRoi && totalStaked > 0) DOM.portRoi.innerText = ((totalProfit / totalStaked) * 100).toFixed(2) + '%';
+    
+    if (window.updateProfitChart) updateProfitChart();
 }
 window.deleteBet = (id) => { betHistory = betHistory.filter(b=>b.id!==id); localStorage.setItem('arb_bet_history', JSON.stringify(betHistory)); updatePortfolio(); updateDashboard(); };
 

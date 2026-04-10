@@ -175,7 +175,10 @@ async function sendTelegramReport(topMatches) {
 
 // --- API Logic ---
 async function fetchLiveArbs() {
-    if (!apiKey) {
+    // Aggressive Sanitization: Remove hidden spaces or invisible characters
+    const cleanApiKey = apiKey.trim().replace(/[^a-z0-9]/gi, '');
+    
+    if (!cleanApiKey) {
         alert("Please set your API Key in the Settings tab first!");
         return;
     }
@@ -192,7 +195,7 @@ async function fetchLiveArbs() {
         }
 
         const fetchPromises = selectedSports.map(sport => {
-            const targetUrl = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&regions=uk&markets=h2h&oddsFormat=decimal`;
+            const targetUrl = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${cleanApiKey}&regions=uk&markets=h2h&oddsFormat=decimal`;
             return fetch(targetUrl).then(async res => {
                 if (!res.ok) {
                     const errText = await res.text();

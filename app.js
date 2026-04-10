@@ -662,59 +662,66 @@ function updateDashboard() {
 }
 
 // --- Navigation & Events ---
-// --- Navigation & Events ---
-DOM.refreshBtn.addEventListener('click', fetchLiveArbs);
+if (DOM.refreshBtn) DOM.refreshBtn.addEventListener('click', fetchLiveArbs);
 
-DOM.navDashboard.addEventListener('click', () => {
-    DOM.navDashboard.classList.add('active');
-    DOM.navPortfolio.classList.remove('active');
-    DOM.navBankroll.classList.remove('active');
-    DOM.navSettings.classList.remove('active');
-    DOM.viewDashboard.style.display = 'block';
-    DOM.viewPortfolio.style.display = 'none';
-    DOM.viewBankroll.style.display = 'none';
-    DOM.viewSettings.style.display = 'none';
-    updateDashboard();
-});
+if (DOM.navDashboard) {
+    DOM.navDashboard.addEventListener('click', () => {
+        DOM.navDashboard.classList.add('active');
+        if (DOM.navPortfolio) DOM.navPortfolio.classList.remove('active');
+        if (DOM.navBankroll) DOM.navBankroll.classList.remove('active');
+        if (DOM.navSettings) DOM.navSettings.classList.remove('active');
+        if (DOM.viewDashboard) DOM.viewDashboard.style.display = 'block';
+        if (DOM.viewPortfolio) DOM.viewPortfolio.style.display = 'none';
+        if (DOM.viewBankroll) DOM.viewBankroll.style.display = 'none';
+        if (DOM.viewSettings) DOM.viewSettings.style.display = 'none';
+        updateDashboard();
+    });
+}
 
-DOM.navPortfolio.addEventListener('click', () => {
-    DOM.navPortfolio.classList.add('active');
-    DOM.navDashboard.classList.remove('active');
-    DOM.navBankroll.classList.remove('active');
-    DOM.navSettings.classList.remove('active');
-    DOM.viewDashboard.style.display = 'none';
-    DOM.viewPortfolio.style.display = 'block';
-    DOM.viewBankroll.style.display = 'none';
-    DOM.viewSettings.style.display = 'none';
-    updatePortfolio();
-});
+if (DOM.navPortfolio) {
+    DOM.navPortfolio.addEventListener('click', () => {
+        DOM.navPortfolio.classList.add('active');
+        if (DOM.navDashboard) DOM.navDashboard.classList.remove('active');
+        if (DOM.navBankroll) DOM.navBankroll.classList.remove('active');
+        if (DOM.navSettings) DOM.navSettings.classList.remove('active');
+        if (DOM.viewDashboard) DOM.viewDashboard.style.display = 'none';
+        if (DOM.viewPortfolio) DOM.viewPortfolio.style.display = 'block';
+        if (DOM.viewBankroll) DOM.viewBankroll.style.display = 'none';
+        if (DOM.viewSettings) DOM.viewSettings.style.display = 'none';
+        updatePortfolio();
+    });
+}
 
-DOM.navBankroll.addEventListener('click', () => {
-    DOM.navBankroll.classList.add('active');
-    DOM.navDashboard.classList.remove('active');
-    DOM.navPortfolio.classList.remove('active');
-    DOM.navSettings.classList.remove('active');
-    DOM.viewDashboard.style.display = 'none';
-    DOM.viewPortfolio.style.display = 'none';
-    DOM.viewBankroll.style.display = 'block';
-    DOM.viewSettings.style.display = 'none';
-    updateBankrollUI();
-});
+if (DOM.navBankroll) {
+    DOM.navBankroll.addEventListener('click', () => {
+        DOM.navBankroll.classList.add('active');
+        if (DOM.navDashboard) DOM.navDashboard.classList.remove('active');
+        if (DOM.navPortfolio) DOM.navPortfolio.classList.remove('active');
+        if (DOM.navSettings) DOM.navSettings.classList.remove('active');
+        if (DOM.viewDashboard) DOM.viewDashboard.style.display = 'none';
+        if (DOM.viewPortfolio) DOM.viewPortfolio.style.display = 'none';
+        if (DOM.viewBankroll) DOM.viewBankroll.style.display = 'block';
+        if (DOM.viewSettings) DOM.viewSettings.style.display = 'none';
+        updateBankrollUI();
+    });
+}
 
-DOM.navSettings.addEventListener('click', () => {
-    DOM.navSettings.classList.add('active');
-    DOM.navDashboard.classList.remove('active');
-    DOM.navPortfolio.classList.remove('active');
-    DOM.navBankroll.classList.remove('active');
-    DOM.viewDashboard.style.display = 'none';
-    DOM.viewPortfolio.style.display = 'none';
-    DOM.viewBankroll.style.display = 'none';
-    DOM.viewSettings.style.display = 'flex';
-    DOM.apiKeyInput.value = apiKey; 
-    DOM.tgTokenInput.value = tgToken;
-    DOM.tgChatIdInput.value = tgChatId;
-    renderBlacklist();
-});
+if (DOM.navSettings) {
+    DOM.navSettings.addEventListener('click', () => {
+        DOM.navSettings.classList.add('active');
+        if (DOM.navDashboard) DOM.navDashboard.classList.remove('active');
+        if (DOM.navPortfolio) DOM.navPortfolio.classList.remove('active');
+        if (DOM.navBankroll) DOM.navBankroll.classList.remove('active');
+        if (DOM.viewDashboard) DOM.viewDashboard.style.display = 'none';
+        if (DOM.viewPortfolio) DOM.viewPortfolio.style.display = 'none';
+        if (DOM.viewBankroll) DOM.viewBankroll.style.display = 'none';
+        if (DOM.viewSettings) DOM.viewSettings.style.display = 'flex';
+        if (DOM.apiKeyInput) DOM.apiKeyInput.value = apiKey; 
+        if (DOM.tgTokenInput) DOM.tgTokenInput.value = tgToken;
+        if (DOM.tgChatIdInput) DOM.tgChatIdInput.value = tgChatId;
+        renderBlacklist();
+    });
+}
 
 function logBet(matchId, strategy) {
     const match = loadedMatches.find(m => m.id === matchId);

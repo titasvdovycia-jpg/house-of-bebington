@@ -174,11 +174,13 @@ async function sendTelegramReport(topMatches) {
 }
 
 // --- API Logic ---
+function cleanBookie(name) {
+    // Normalizes "Betfair Exchange", "Betfair Sportsbook", "Betfair (UK)" -> "Betfair"
+    return name.split(' ')[0].split('(')[0].trim().toLowerCase();
+}
+
 async function fetchLiveArbs() {
-    // Aggressive Sanitization: Remove hidden spaces or invisible characters
-    const cleanApiKey = apiKey.trim().replace(/[^a-z0-9]/gi, '');
-    
-    if (!cleanApiKey) {
+    if (!apiKey) {
         alert("Please set your API Key in the Settings tab first!");
         return;
     }
@@ -195,6 +197,7 @@ async function fetchLiveArbs() {
         }
 
         const fetchPromises = selectedSports.map(sport => {
+            const cleanApiKey = apiKey.trim().replace(/[^a-z0-9]/gi, '');
             const targetUrl = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${cleanApiKey}&regions=uk&markets=h2h&oddsFormat=decimal`;
             return fetch(targetUrl).then(async res => {
                 if (!res.ok) {
@@ -234,7 +237,7 @@ async function fetchLiveArbs() {
             });
 
             const globalLegs = Object.values(globalBest);
-            const globalUnique = new Set(globalLegs.map(l => l.bookie));
+            const globalUnique = new Set(globalLegs.map(l => cleanBookie(l.bookie)));
 
             if (globalUnique.size > 1) {
                 const calc = calculateArbitrage(globalLegs.map(l => ({ outcome: '', odds: l.price, bookmaker: l.bookie }))); 
@@ -249,7 +252,7 @@ async function fetchLiveArbs() {
                     let secondBestPrice = 0;
                     let secondBestBookie = '';
                     game.bookmakers.forEach(bookie => {
-                        if (bookie.title === globalLegs[0].bookie) return; 
+                        if (cleanBookie(bookie.title) === globalUnique.values().next().value) return; 
                         const h2h = bookie.markets.find(m => m.key === 'h2h');
                         if (!h2h) return;
                         const o = h2h.outcomes.find(out => out.name === nameToSwap);
@@ -273,7 +276,10 @@ async function fetchLiveArbs() {
                 });
             }
 
-            if (bestMultiLegs.length >= 2 && bestMultiMargin > -20) {
+            if (bestMultiLegs.length >= 2) {
+                const uniqueCheck = new Set(bestMultiLegs.map(l => cleanBookie(l.bookmaker)));
+                if (uniqueCheck.size < 2) return; // NUCLEAR OPTION
+                
                 const calc = calculateArbitrage(bestMultiLegs);
                 matches.push({
                     id: game.id,

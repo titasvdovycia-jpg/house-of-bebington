@@ -449,6 +449,24 @@ async function fetchLiveArbs() {
                 // ONLY PUSH IF MARGIN IS DECENT (> 0.05%) TO AVOID "0 WINNING" SUGGESTIONS
                 if (bestMultiMargin > 0.05) {
                     const calc = calculateArbitrage(bestMultiLegs);
+                    
+                    // Capture Full Market Mapping for "Market Depth" feature
+                    const fullMarket = [];
+                    // Get all supported bookies from our search list
+                    Object.keys(BOOKIE_SEARCH_URLS).forEach(bName => {
+                        const bookieData = game.bookmakers.find(bk => bk.title.toLowerCase().includes(bName.toLowerCase()));
+                        if (bookieData) {
+                            const h2h = bookieData.markets.find(m => m.key === 'h2h');
+                            fullMarket.push({
+                                name: bookieData.title,
+                                odds: h2h ? h2h.outcomes.map(o => `${o.name}: ${o.price}`).join(' | ') : 'No Market',
+                                status: 'active'
+                            });
+                        } else {
+                            fullMarket.push({ name: bName, odds: '-', status: 'missing' });
+                        }
+                    });
+
                     matches.push({
                         id: game.id,
                         sport: game.sport_title,
@@ -457,7 +475,8 @@ async function fetchLiveArbs() {
                         legs: bestMultiLegs,
                         margin: calc.margin,
                         totalProb: calc.totalProb,
-                        isArb: calc.isArb
+                        isArb: calc.isArb,
+                        fullMarket: fullMarket
                     });
                 }
             }
@@ -585,11 +604,44 @@ function renderArbCard(match, index, strategy = 'arb') {
                     <span style="color: ${profit >= 0 ? 'var(--accent-green)' : '#ff4444'}; font-weight: 700;">
                         ${strategy === 'under' ? 'Variable' : (profit >= 0 ? '+' : '') + formatCurrency(profit)}
                     </span>
-                    <button class="log-btn" onclick="logBet('${match.id}', '${strategy}')">Log Bet</button>
+                    <button class="primary-btn" style="width: 140px; padding: 10px;" onclick="logBet('${match.id}', '${strategy}')">Log Bet</button>
+                </div>
+            </div>
+            
+            <div style="border-top: 1px solid var(--border-color); padding: 0.5rem 1.5rem;">
+                <button onclick="toggleMarketDepth('${match.id}')" style="background: transparent; border: none; color: var(--accent-blue); font-size: 0.75rem; cursor: pointer; padding: 0.5rem 0; display: flex; align-items: center; gap: 4px;">
+                    <span id="depth-icon-${match.id}">▶</span> Market Depth (Full Bookie View)
+                </button>
+                <div id="depth-container-${match.id}" style="display: none; margin-top: 0.5rem; padding-bottom: 0.5rem;">
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                        ${match.fullMarket.map(bk => `
+                            <div style="background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 4px; font-size: 0.7rem; border-left: 2px solid ${bk.status === 'active' ? 'var(--accent-green)' : 'rgba(255,255,255,0.1)'}">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="font-weight: bold; color: ${bk.status === 'active' ? 'white' : 'var(--text-secondary)'}">${bk.name}</span>
+                                    ${match.legs.some(l => l.bookmaker === bk.name) ? '<span style="color: var(--accent-green); font-size:0.6rem;">BEST</span>' : ''}
+                                </div>
+                                <div style="color: ${bk.status === 'active' ? 'var(--text-secondary)' : '#444'}; font-family: var(--font-mono); margin-top: 2px;">
+                                    ${bk.odds}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
             </div>
         </div>
     `;
+}
+
+window.toggleMarketDepth = function(id) {
+    const container = document.getElementById(`depth-container-${id}`);
+    const icon = document.getElementById(`depth-icon-${id}`);
+    if (container.style.display === 'none') {
+        container.style.display = 'block';
+        icon.innerText = '▼';
+    } else {
+        container.style.display = 'none';
+        icon.innerText = '▶';
+    }
 }
 
 function updateMatchStrategy(matchId, newStrategy) {
@@ -867,9 +919,30 @@ function settleBet(id, result, winningLegIndex = null) {
 
     localStorage.setItem('arb_bookie_balances', JSON.stringify(bookieBalances));
     localStorage.setItem('arb_bet_history', JSON.stringify(betHistory));
+    
+    if (result === 'won') {
+        const winningLeg = winningLegIndex !== null ? bet.legs[winningLegIndex] : bet.legs[0];
+        const payout = winningLeg.stake * winningLeg.odds;
+        showToast(`💰 £${payout.toFixed(2)} injected into ${winningLeg.bookmaker}!`);
+    }
+
     updatePortfolio();
     updateBankrollUI();
     updateDashboard();
+}
+
+function showToast(msg) {
+    const toast = document.createElement('div');
+    toast.className = 'flash-toast';
+    toast.innerText = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add('visible');
+    }, 100);
+    setTimeout(() => {
+        toast.classList.remove('visible');
+        setTimeout(() => toast.remove(), 500);
+    }, 3000);
 }
 
 function updatePortfolio() {

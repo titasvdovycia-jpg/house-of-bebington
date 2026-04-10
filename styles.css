@@ -687,7 +687,7 @@ body {
 .ticker {
     display: inline-flex;
     white-space: nowrap;
-    animation: ticker 40s linear infinite;
+    animation: ticker 90s linear infinite;
 }
 
 .ticker:hover {

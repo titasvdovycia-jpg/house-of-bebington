@@ -13,12 +13,49 @@ function calculateArbitrage(legs) {
     };
 }
 
-function calculateStakes(globalBankroll, totalProb, legs) {
-    // To guarantee equal profit, stake is proportional to implied probability
-    return legs.map(leg => {
-        const prob = 1 / leg.odds;
-        const stake = (globalBankroll * prob) / totalProb;
-        return { ...leg, stake };
+function calculateStakes(globalBankroll, totalProb, legs, strategy = 'arb') {
+    if (strategy === 'arb') {
+        // Equal profit on all sides
+        return legs.map(leg => {
+            const prob = 1 / leg.odds;
+            const stake = (globalBankroll * prob) / totalProb;
+            return { ...leg, stake };
+        });
+    } else if (strategy === 'under') {
+        // UNDER-HEDGING: 
+        // We stake just enough on the longshot (higher odds) to break even, 
+        // and put the rest on the favorite to maximize profit.
+        const sorted = [...legs].sort((a, b) => b.odds - a.odds);
+        const longshot = sorted[0];
+        const favorite = sorted[1];
+        
+        const longshotStake = globalBankroll / longshot.odds;
+        const favoriteStake = globalBankroll - longshotStake;
+        
+        return legs.map(leg => {
+            const stake = (leg.bookmaker === longshot.bookmaker) ? longshotStake : favoriteStake;
+            return { ...leg, stake };
+        });
+    }
+}
+
+function calculateKelly(match, bankroll) {
+    // Kelly Criterion: f* = (bp - q) / b
+    // b = decimal odds - 1
+    // p = "True" probability (We use average market prob)
+    // q = 1 - p
+    
+    // 1. Get average price for each leg to estimate "True" probability
+    // (In a real app, you'd fetch more bookies, but we use the legs we have)
+    const avgProbTotal = match.totalProb;
+    
+    return match.legs.map(leg => {
+        const b = leg.odds - 1;
+        const p = (1 / leg.odds) / avgProbTotal; // Normalized probability
+        const q = 1 - p;
+        const f = (b * p - q) / b;
+        const suggestedStake = Math.max(0, f * bankroll * 0.1); // Use quarter-kelly (0.1) for safety
+        return { ...leg, kellyStake: suggestedStake, kellyPercent: (f * 100).toFixed(1) };
     });
 }
 
@@ -27,11 +64,12 @@ const formatCurrency = (val) => new Intl.NumberFormat('en-GB', { style: 'currenc
 const formatOdds = (val) => val.toFixed(2);
 
 // App State
-let currentBankroll = 1000;
-let apiKey = localStorage.getItem('arb_api_key') || ''; 
-let tgToken = localStorage.getItem('tg_bot_token') || '';
-let tgChatId = localStorage.getItem('tg_chat_id') || '';
+let currentBankroll = parseFloat(localStorage.getItem('arb_bankroll')) || 1000;
+let apiKey = localStorage.getItem('arb_api_key') || '6cbd5867fac1c7ea342a271600898dd9'; 
+let tgToken = localStorage.getItem('tg_bot_token') || '8393406772:AAEEvxoyvv5weSH3-gDEC3fk6ldskXP6AT0';
+let tgChatId = '5761611308'; 
 
+let betHistory = JSON.parse(localStorage.getItem('arb_bet_history')) || [];
 let loadedMatches = [];
 let autoScanInterval = null;
 
@@ -59,9 +97,16 @@ const DOM = {
     
     // Nav
     navDashboard: document.getElementById('nav-dashboard'),
+    navPortfolio: document.getElementById('nav-portfolio'),
     navSettings: document.getElementById('nav-settings'),
     viewDashboard: document.getElementById('view-dashboard'),
+    viewPortfolio: document.getElementById('view-portfolio'),
     viewSettings: document.getElementById('view-settings'),
+    
+    // Portfolio Metrics
+    portTotalProfit: document.getElementById('port-total-profit'),
+    portRoi: document.getElementById('port-roi'),
+    betHistoryTable: document.getElementById('bet-history-table'),
     
     // Settings
     apiKeyInput: document.getElementById('api-key-input'),
@@ -87,14 +132,8 @@ async function findChatId() {
     
     let combined = (box1 + ":" + box2).replace(/[^a-zA-Z0-9:\-_]/g, '');
     if (!combined.includes(':')) combined = (box2 + ":" + box1).replace(/[^a-zA-Z0-9:\-_]/g, '');
-    let testToken = combined.length > 20 ? combined : '';
+    let testToken = combined.length > 20 ? combined : '8490087884:AAHwFwk7WVwsuPP4yeikHfdxBAmcuvvvG0Y';
     if (testToken.toLowerCase().startsWith('bot')) testToken = testToken.substring(3);
-
-    if (!testToken) {
-        DOM.findIdStatus.innerText = "Error: Paste your Bot Token first!";
-        DOM.findIdStatus.style.color = "#ff4444";
-        return;
-    }
 
     DOM.findIdStatus.innerText = "Verifying Bot Token...";
     DOM.findIdStatus.style.color = "var(--accent-blue)";
@@ -134,23 +173,23 @@ async function findChatId() {
             DOM.findIdStatus.innerHTML = `Still no messages. <strong>Search for @${botName}</strong>, click START, and send a text!`;
         }
     } catch (e) {
-        DOM.findIdStatus.innerText = "Error: Connection failed.";
+        DOM.findIdStatus.innerText = "Error: Connection failed. Use http://localhost:8000.";
         DOM.findIdStatus.style.color = "#ff4444";
     }
 }
 async function sendTelegramReport(topMatches) {
     if (!tgToken || !tgChatId) return;
     
-    let reportText = `\uD83C\uDFC6 *House of Bebington: Top 3 Report*\n\n`;
+    let reportText = `🏆 *House of Bebington: Top 3 Report*\n\n`;
     
     topMatches.forEach((match, i) => {
-        const sign = match.isArb ? '\uD83D\uDEA8 ' : '\uD83D\uDCCA ';
+        const sign = match.isArb ? '🚨 ' : '📊 ';
         const marginSign = match.margin > 0 ? '+' : '';
         reportText += `${sign}#${i+1}: ${match.matchup}\n`;
         reportText += `Margin: ${marginSign}${match.margin.toFixed(2)}%\n`;
         
         match.legs.forEach(leg => {
-            reportText += `\u2022 ${leg.bookmaker}: ${formatOdds(leg.odds)}\n`;
+            reportText += `• ${leg.bookmaker}: ${formatOdds(leg.odds)}\n`;
         });
         reportText += `\n`;
     });
@@ -166,7 +205,10 @@ async function sendTelegramReport(topMatches) {
         const json = await res.json();
         
         if (!res.ok) {
-            console.error("Telegram API Error", json.description);
+            DOM.arbFeed.innerHTML = `<div style="background: rgba(255,0,0,0.2); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                <p style="color: #ffaa44; font-weight: bold; margin:0">Telegram API Error:</p>
+                <p style="color: #ffaa44; font-size: 0.85em; margin:0">${json.description}</p>
+            </div>` + DOM.arbFeed.innerHTML;
         }
     } catch (e) {
         console.error("Telegram Report Failed", e);
@@ -197,8 +239,7 @@ async function fetchLiveArbs() {
         }
 
         const fetchPromises = selectedSports.map(sport => {
-            const cleanApiKey = apiKey.trim().replace(/[^a-z0-9]/gi, '');
-            const targetUrl = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${cleanApiKey}&regions=uk&markets=h2h&oddsFormat=decimal`;
+            const targetUrl = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&regions=uk&markets=h2h&oddsFormat=decimal`;
             return fetch(targetUrl).then(async res => {
                 if (!res.ok) {
                     const errText = await res.text();
@@ -225,6 +266,8 @@ async function fetchLiveArbs() {
             let bestMultiLegs = [];
 
             // Cross-Bookmaker Engine: 
+            // We want to find the best combination where at least 2 bookies are involved.
+            // 1. Find the best price for each outcome across all bookies
             const globalBest = {}; 
             game.bookmakers.forEach(bookie => {
                 const h2h = bookie.markets.find(m => m.key === 'h2h');
@@ -237,10 +280,11 @@ async function fetchLiveArbs() {
             });
 
             const globalLegs = Object.values(globalBest);
-            const globalUnique = new Set(globalLegs.map(l => cleanBookie(l.bookie)));
+            const globalUnique = new Set(globalLegs.map(l => l.bookie));
 
             if (globalUnique.size > 1) {
-                const calc = calculateArbitrage(globalLegs.map(l => ({ outcome: '', odds: l.price, bookmaker: l.bookie }))); 
+                // If the global bests already use different bookies, we are done!
+                const calc = calculateArbitrage(globalLegs.map(l => ({ outcome: '', odds: l.price, bookmaker: l.bookie }))); // Simplified for calc
                 bestMultiMargin = calc.margin;
                 bestMultiLegs = Object.keys(globalBest).map(name => ({
                     outcome: name,
@@ -248,11 +292,17 @@ async function fetchLiveArbs() {
                     bookmaker: globalBest[name].bookie
                 }));
             } else {
+                // If global best is all one bookie (e.g. Betfair), we need to find a 2nd bookie.
+                // We try swapping each outcome to its 2nd best bookie and see which gives the best margin.
                 outcomeNames.forEach(nameToSwap => {
+                    const otherOutcomesBest = {};
+                    outcomeNames.forEach(n => { if(n !== nameToSwap) otherOutcomesBest[n] = globalBest[n]; });
+
+                    // Find best price for nameToSwap from a DIFFERENT bookie
                     let secondBestPrice = 0;
                     let secondBestBookie = '';
                     game.bookmakers.forEach(bookie => {
-                        if (cleanBookie(bookie.title) === globalUnique.values().next().value) return; 
+                        if (bookie.title === globalLegs[0].bookie) return; // Skip the dominant bookie
                         const h2h = bookie.markets.find(m => m.key === 'h2h');
                         if (!h2h) return;
                         const o = h2h.outcomes.find(out => out.name === nameToSwap);
@@ -278,7 +328,7 @@ async function fetchLiveArbs() {
 
             if (bestMultiLegs.length >= 2) {
                 const uniqueCheck = new Set(bestMultiLegs.map(l => cleanBookie(l.bookmaker)));
-                if (uniqueCheck.size < 2) return; // NUCLEAR OPTION
+                if (uniqueCheck.size < 2) return; // NUCLEAR OPTION: Discard if still only 1 bookie
                 
                 const calc = calculateArbitrage(bestMultiLegs);
                 matches.push({
@@ -319,23 +369,23 @@ async function fetchLiveArbs() {
 }
 
 // --- UI Logic ---
-function renderArbCard(match, index) {
-    // If it's not an arb, we modify the styling slightly to show it's just a narrow margin
+function renderArbCard(match, index, strategy = 'arb') {
     const isArb = match.isArb;
-    const badgeClass = isArb ? 'arb-profit-badge' : 'arb-profit-badge'; // We can use the same shape
+    const badgeClass = 'arb-profit-badge';
     const badgeColor = isArb ? 'var(--accent-green)' : 'var(--text-secondary)';
     const badgeBg = isArb ? 'var(--accent-green-dim)' : 'rgba(255,255,255,0.05)';
     const badgeBorder = isArb ? '1px solid rgba(0, 255, 136, 0.2)' : '1px solid var(--border-color)';
     const cardBorderHighlight = isArb ? 'var(--accent-green)' : 'rgba(255,255,255,0.1)';
 
-    const stakedLegs = calculateStakes(currentBankroll, match.totalProb, match.legs);
+    const stakedLegs = calculateStakes(currentBankroll, match.totalProb, match.legs, strategy);
+    const kellyInfo = calculateKelly(match, currentBankroll);
     
-    // Total return is Stake * Decimal Odds (they will all be equal by definition of the math)
     const guaranteedReturn = stakedLegs[0].stake * stakedLegs[0].odds;
     const profit = guaranteedReturn - currentBankroll;
 
     let legsHtml = '';
-    stakedLegs.forEach(leg => {
+    stakedLegs.forEach((leg, i) => {
+        const k = kellyInfo[i];
         legsHtml += `
             <div class="arb-leg">
                 <div class="leg-top">
@@ -346,24 +396,27 @@ function renderArbCard(match, index) {
                     <div class="leg-odds">${formatOdds(leg.odds)}</div>
                 </div>
                 <div class="leg-bet-amount">
-                    <span class="bet-label">Suggested Stake</span>
+                    <span class="bet-label">Stake</span>
                     <span class="bet-value">${formatCurrency(leg.stake)}</span>
+                </div>
+                <div style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--text-secondary); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 4px;">
+                    Kelly: ${k.kellyPercent}% | True Prob: ${( (1/leg.odds)/match.totalProb * 100).toFixed(0)}%
                 </div>
             </div>
         `;
     });
 
     return `
-        <div class="arb-card animate-slide-in" style="animation-delay: ${index * 0.05}s">
+        <div class="arb-card animate-slide-in" id="card-${match.id}" style="animation-delay: ${index * 0.05}s">
             <style>
-                .arb-card.card-${index}::before { background: ${cardBorderHighlight}; box-shadow: 0 0 12px ${cardBorderHighlight}; }
+                .arb-card#card-${match.id}::before { background: ${cardBorderHighlight}; box-shadow: 0 0 12px ${cardBorderHighlight}; }
             </style>
-            <div class="arb-header card-${index}">
+            <div class="arb-header">
                 <div class="arb-game-info">
                     <h3>${match.matchup}</h3>
                     <div class="arb-meta">
                         <span>${match.sport}</span>
-                        <span>\u2022</span>
+                        <span>•</span>
                         <span>${match.time}</span>
                     </div>
                 </div>
@@ -371,18 +424,42 @@ function renderArbCard(match, index) {
                     ${isArb ? '+' : ''}${match.margin.toFixed(2)}% ${isArb ? 'Arb' : 'Margin'}
                 </div>
             </div>
+
+            <div class="strategy-picker">
+                <button class="strat-btn ${strategy === 'arb' ? 'active' : ''}" onclick="updateMatchStrategy('${match.id}', 'arb')">Equal Arb</button>
+                <button class="strat-btn ${strategy === 'under' ? 'active' : ''}" onclick="updateMatchStrategy('${match.id}', 'under')">Under-Hedge</button>
+            </div>
+
             <div class="arb-body" style="grid-template-columns: repeat(${match.legs.length}, 1fr);">
                 ${legsHtml}
             </div>
             
             <div style="background: rgba(0,0,0,0.2); padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: var(--text-secondary); font-size: 0.875rem;">Total Return: <strong style="color: var(--text-primary);">${formatCurrency(guaranteedReturn)}</strong></span>
-                <span style="color: ${isArb ? 'var(--accent-green)' : 'var(--text-secondary)'}; font-weight: 700;">
-                    ${isArb ? '+' : ''} ${formatCurrency(profit)} ${isArb ? 'Profit' : 'Loss'}
-                </span>
+                <div style="display: flex; flex-direction: column;">
+                    <span style="color: var(--text-secondary); font-size: 0.75rem;">Total Return</span>
+                    <strong style="color: var(--text-primary); font-size: 1rem;">${formatCurrency(guaranteedReturn)}</strong>
+                </div>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <span style="color: ${profit >= 0 ? 'var(--accent-green)' : '#ff4444'}; font-weight: 700;">
+                        ${profit >= 0 ? '+' : ''} ${formatCurrency(profit)}
+                    </span>
+                    <button class="log-btn" onclick="logBet('${match.id}', '${strategy}')">Log Bet</button>
+                </div>
             </div>
         </div>
     `;
+}
+
+function updateMatchStrategy(matchId, newStrategy) {
+    const card = document.getElementById(`card-${matchId}`);
+    const matchIndex = loadedMatches.findIndex(m => m.id === matchId);
+    if (matchIndex === -1) return;
+    
+    // Replace the card content with new strategy render
+    const newHtml = renderArbCard(loadedMatches[matchIndex], matchIndex, newStrategy);
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = newHtml;
+    card.replaceWith(tempDiv.firstElementChild);
 }
 
 function updateDashboard() {
@@ -418,7 +495,9 @@ DOM.globalBankroll.addEventListener('input', (e) => {
     const val = parseFloat(e.target.value);
     if (!isNaN(val) && val > 0) {
         currentBankroll = val;
+        localStorage.setItem('arb_bankroll', currentBankroll);
         updateDashboard();
+        updatePortfolio();
     }
 });
 
@@ -426,10 +505,112 @@ DOM.refreshBtn.addEventListener('click', fetchLiveArbs);
 
 DOM.navDashboard.addEventListener('click', () => {
     DOM.navDashboard.classList.add('active');
+    DOM.navPortfolio.classList.remove('active');
     DOM.navSettings.classList.remove('active');
     DOM.viewDashboard.style.display = 'block';
+    DOM.viewPortfolio.style.display = 'none';
     DOM.viewSettings.style.display = 'none';
 });
+
+DOM.navPortfolio.addEventListener('click', () => {
+    DOM.navPortfolio.classList.add('active');
+    DOM.navDashboard.classList.remove('active');
+    DOM.navSettings.classList.remove('active');
+    DOM.viewDashboard.style.display = 'none';
+    DOM.viewPortfolio.style.display = 'block';
+    DOM.viewSettings.style.display = 'none';
+    updatePortfolio();
+});
+
+function logBet(matchId, strategy) {
+    const match = loadedMatches.find(m => m.id === matchId);
+    if (!match) return;
+
+    const stakes = calculateStakes(currentBankroll, match.totalProb, match.legs, strategy);
+    const guaranteedReturn = (stakes[0].stake * stakes[0].odds);
+    
+    const newBet = {
+        id: Date.now(),
+        date: new Date().toLocaleDateString(),
+        matchup: match.matchup,
+        sport: match.sport,
+        legs: stakes,
+        totalStake: currentBankroll,
+        possibleReturn: guaranteedReturn,
+        status: 'pending'
+    };
+
+    betHistory.unshift(newBet);
+    localStorage.setItem('arb_bet_history', JSON.stringify(betHistory));
+    
+    // Deduct from bankroll temporarily? No, usually hedge bettors keep bankroll as "active funds"
+    // We just log it.
+    
+    alert("Bet Logged! Check the Portfolio tab to track results.");
+    updatePortfolio();
+}
+
+function settleBet(id, result) {
+    const bet = betHistory.find(b => b.id === id);
+    if (!bet || bet.status !== 'pending') return;
+
+    bet.status = result;
+    
+    if (result === 'won') {
+        const netProfit = bet.possibleReturn - bet.totalStake;
+        currentBankroll += netProfit;
+    } else {
+        currentBankroll -= bet.totalStake;
+    }
+
+    localStorage.setItem('arb_bankroll', currentBankroll);
+    localStorage.setItem('arb_bet_history', JSON.stringify(betHistory));
+    DOM.globalBankroll.value = currentBankroll.toFixed(2);
+    updatePortfolio();
+    updateDashboard();
+}
+
+function updatePortfolio() {
+    let totalProfit = 0;
+    let totalStaked = 0;
+    let activeCount = 0;
+
+    const tableHtml = betHistory.map(bet => {
+        if (bet.status === 'pending') activeCount++;
+        if (bet.status === 'won') totalProfit += (bet.possibleReturn - bet.totalStake);
+        if (bet.status === 'lost') totalProfit -= bet.totalStake;
+        totalStaked += bet.totalStake;
+
+        const profitVal = bet.possibleReturn - bet.totalStake;
+        const color = bet.status === 'won' ? 'var(--accent-green)' : (bet.status === 'lost' ? '#ff4444' : 'var(--text-primary)');
+
+        return `
+            <tr>
+                <td>${bet.date}</td>
+                <td><strong>${bet.matchup}</strong><br><small>${bet.sport}</small></td>
+                <td>${bet.legs.length}-Way</td>
+                <td>${formatCurrency(bet.totalStake)}</td>
+                <td style="color: ${color}">${formatCurrency(bet.possibleReturn)}</td>
+                <td><span class="status-badge status-${bet.status}">${bet.status}</span></td>
+                <td>
+                    ${bet.status === 'pending' ? `
+                        <button class="settle-btn settle-won" onclick="settleBet(${bet.id}, 'won')">Won</button>
+                        <button class="settle-btn settle-lost" onclick="settleBet(${bet.id}, 'lost')">Lost</button>
+                    ` : '---'}
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    DOM.betHistoryTable.innerHTML = tableHtml || '<tr><td colspan="7" style="text-align:center; padding: 2rem; color: var(--text-secondary);">No bets logged yet.</td></tr>';
+    
+    DOM.portTotalProfit.innerText = formatCurrency(totalProfit);
+    DOM.portTotalProfit.style.color = totalProfit >= 0 ? 'var(--accent-green)' : '#ff4444';
+    
+    const roi = totalStaked > 0 ? (totalProfit / totalStaked) * 100 : 0;
+    DOM.portRoi.innerText = `${roi.toFixed(2)}%`;
+    document.getElementById('port-active-bets').innerText = activeCount;
+}
 
 DOM.navSettings.addEventListener('click', () => {
     DOM.navSettings.classList.add('active');
@@ -460,18 +641,20 @@ DOM.autoScanToggle.addEventListener('change', (e) => {
     updateTokenHealth();
     if (e.target.checked) {
         safeAutoScan(); // Run once immediately (if awake)
+        // 500 requests/month = 2 sports = 250 scans/month = ~8 scans/day
+        // To spread 8 scans across 15 waking hours -> 1 scan roughly every 2 hours (7200000 ms)
         autoScanInterval = setInterval(safeAutoScan, 7200000);
     } else {
         clearInterval(autoScanInterval);
         DOM.statusText.innerHTML = '<span class="dot" style="background:var(--accent-green);"></span> Scan Complete';
     }
 });
-
 // Wrapper that ensures we only scan during UK Waking Hours (8 AM to 11 PM)
 function safeAutoScan() {
     const ukTimeStr = new Date().toLocaleString("en-GB", { timeZone: "Europe/London", hour12: false, hour: "numeric" });
     const ukHour = parseInt(ukTimeStr, 10);
     
+    // If it's between 8 AM (08:00) and 10:59 PM (22:59)
     if (ukHour >= 8 && ukHour < 23) {
         fetchLiveArbs();
     } else {
@@ -508,6 +691,7 @@ function updateTokenHealth() {
     const limit = 500;
     
     const usagePercent = Math.min((monthlyUsage / limit) * 100, 100);
+    const scansRemaining = Math.max(0, limit);
     const daysLast = Math.floor(limit / (selectedCount * scansPerDay));
     const safetyDays = isFinite(daysLast) ? Math.min(daysLast, 31) : 31;
 

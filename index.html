@@ -98,6 +98,15 @@
            <!-- Populated by JS -->
         </div>
       </div>
+
+      <div class="settings-card" id="rebalancer-card" style="max-width: 100%; width: 100%; margin-top: 2rem;">
+        <h3>Capital Rebalancer</h3>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Move funds between bookmakers to cover bottle-necks.</p>
+        <div id="rebalance-suggestions" style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <!-- Suggetions injected here -->
+            <p style="font-size: 0.8rem; color: #666;">Scan markets or update balances to see rebalancing advice.</p>
+        </div>
+      </div>
     </main>
     
     <!-- Portfolio View -->
@@ -209,20 +218,14 @@
         </div>
 
         <div class="form-group" style="margin-top: 2.5rem; border-top: 1px solid var(--border-color); padding-top: 2rem;">
-          <label>System Rules & Limitations</label>
-          <p style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 1rem;">Type a bookmaker name and click Add to completely block it from scans.</p>
-          <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-             <input type="text" id="blacklist-input" placeholder="e.g. betfair" style="flex-grow: 1; font-family: var(--font-mono); padding-left: 1rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: white; border-radius: 8px;">
-             <button id="add-blacklist-btn" class="primary-btn" style="padding: 10px 15px;">Add</button>
-          </div>
-          <div id="blacklist-tags" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-             <!-- Populated by JS -->
-          </div>
+          <label style="color: #ff4444;">Nuclear Option</label>
+          <p style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 1rem;">If the app is frozen or data is corrupted, this will wipe ALL local settings (API keys, balances, history) and restart fresh.</p>
+          <button id="master-reset-btn" class="primary-btn" style="background: linear-gradient(135, #ff4444, #880000); border: 1px solid #ff4444; width: 100%;">FACTORY MASTER RESET</button>
         </div>
       </div>
     </main>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2.2"></script>
 </body>
 </html>

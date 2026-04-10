@@ -85,7 +85,8 @@ const BOOKIE_SEARCH_URLS = {
     'spreadex': 'https://www.spreadex.com/sports/search?q=',
     'kwiff': 'https://kwiff.com/search?q=',
     'leovegas': 'https://www.leovegas.com/en-gb/sport#search/query=',
-    'mr green': 'https://www.mrgreen.com/en-gb/betting#search/query='
+    'mr green': 'https://www.mrgreen.com/en-gb/betting#search/query=',
+    'casumo': 'https://www.casumo.com/en-gb/sports#search/'
 };
 
 // App State
@@ -242,8 +243,6 @@ async function sendTelegramReport(topMatches) {
 
 // --- API Logic ---
 function cleanBookie(name) {
-    // Normalizes "Betfair Exchange", "Betfair Sportsbook", "Betfair (UK)" -> "betfair"
-    // Also handles multi-word names like "William Hill" or "Paddy Power"
     let clean = name.toLowerCase().split('(')[0].trim();
     if (clean.includes('betfair')) return 'betfair';
     if (clean.includes('william hill')) return 'william hill';
@@ -252,6 +251,9 @@ function cleanBookie(name) {
     if (clean.includes('grosvenor')) return 'grosvenor';
     if (clean.includes('livescore')) return 'livescore';
     if (clean.includes('virgin')) return 'virgin';
+    if (clean.includes('smarkets')) return 'smarkets';
+    if (clean.includes('matchbook')) return 'matchbook';
+    if (clean.includes('casumo')) return 'casumo';
     return clean;
 }
 
@@ -592,6 +594,54 @@ function logBet(matchId, strategy) {
     updatePortfolio();
 }
 
+function deleteBet(id) {
+    if (!confirm("Delete this bet from history? This cannot be undone.")) return;
+    
+    betHistory = betHistory.filter(b => b.id !== id);
+    localStorage.setItem('arb_bet_history', JSON.stringify(betHistory));
+    updatePortfolio();
+    updateDashboard();
+}
+
+function startEdit(id) {
+    const bet = betHistory.find(b => b.id === id);
+    if (bet) {
+        bet.isEditing = true;
+        updatePortfolio();
+    }
+}
+
+function cancelEdit(id) {
+    const bet = betHistory.find(b => b.id === id);
+    if (bet) {
+        delete bet.isEditing;
+        updatePortfolio();
+    }
+}
+
+function saveEdit(id) {
+    const bet = betHistory.find(b => b.id === id);
+    if (!bet) return;
+
+    // Grab the new values from the inputs
+    bet.legs.forEach((leg, idx) => {
+        const oddsInput = document.getElementById(`edit-odds-${id}-${idx}`);
+        const stakeInput = document.getElementById(`edit-stake-${id}-${idx}`);
+        if (oddsInput) leg.odds = parseFloat(oddsInput.value) || leg.odds;
+        if (stakeInput) leg.stake = parseFloat(stakeInput.value) || leg.stake;
+    });
+
+    // Recalculate totals
+    bet.totalStake = bet.legs.reduce((sum, l) => sum + l.stake, 0);
+    // Use first leg for guaranteed return calculation (they should be roughly equal in arb)
+    bet.possibleReturn = bet.legs[0].stake * bet.legs[0].odds;
+    
+    delete bet.isEditing;
+    localStorage.setItem('arb_bet_history', JSON.stringify(betHistory));
+    updatePortfolio();
+    updateDashboard();
+}
+
 function settleBet(id, result) {
     const bet = betHistory.find(b => b.id === id);
     if (!bet || bet.status !== 'pending') return;
@@ -626,6 +676,32 @@ function updatePortfolio() {
         const profitVal = bet.possibleReturn - bet.totalStake;
         const color = bet.status === 'won' ? 'var(--accent-green)' : (bet.status === 'lost' ? '#ff4444' : 'var(--text-primary)');
 
+        if (bet.isEditing) {
+            return `
+                <tr class="editing-row">
+                    <td>${bet.date}</td>
+                    <td><strong>${bet.matchup}</strong></td>
+                    <td colspan="3">
+                        <div style="display: grid; gap: 4px;">
+                            ${bet.legs.map((l, idx) => `
+                                <div style="display: flex; gap: 8px; align-items: center; background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px;">
+                                    <span style="font-size: 0.7rem; width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${l.bookmaker}</span>
+                                    <input type="number" step="0.01" value="${l.odds}" id="edit-odds-${bet.id}-${idx}" style="width: 60px; background: #222; border: 1px solid #444; color: white; padding: 2px 4px; border-radius: 4px;">
+                                    <span style="font-size: 0.7rem;">@</span>
+                                    <input type="number" step="0.1" value="${l.stake.toFixed(2)}" id="edit-stake-${bet.id}-${idx}" style="width: 70px; background: #222; border: 1px solid #444; color: white; padding: 2px 4px; border-radius: 4px;">
+                                </div>
+                            `).join('')}
+                        </div>
+                    </td>
+                    <td><span class="status-badge status-${bet.status}">${bet.status}</span></td>
+                    <td>
+                        <button class="settle-btn" style="background: var(--accent-green); color: black;" onclick="saveEdit(${bet.id})">Save</button>
+                        <button class="settle-btn" style="background: #444; color: white; margin-top: 4px;" onclick="cancelEdit(${bet.id})">Cancel</button>
+                    </td>
+                </tr>
+            `;
+        }
+
         return `
             <tr>
                 <td>${bet.date}</td>
@@ -635,10 +711,20 @@ function updatePortfolio() {
                 <td style="color: ${color}">${formatCurrency(bet.possibleReturn)}</td>
                 <td><span class="status-badge status-${bet.status}">${bet.status}</span></td>
                 <td>
-                    ${bet.status === 'pending' ? `
-                        <button class="settle-btn settle-won" onclick="settleBet(${bet.id}, 'won')">Won</button>
-                        <button class="settle-btn settle-lost" onclick="settleBet(${bet.id}, 'lost')">Lost</button>
-                    ` : '---'}
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        ${bet.status === 'pending' ? `
+                            <div style="display: flex; gap: 4px;">
+                                <button class="settle-btn settle-won" onclick="settleBet(${bet.id}, 'won')" style="flex:1">Won</button>
+                                <button class="settle-btn settle-lost" onclick="settleBet(${bet.id}, 'lost')" style="flex:1">Lost</button>
+                            </div>
+                            <div style="display: flex; gap: 4px;">
+                                <button class="settle-btn" onclick="startEdit(${bet.id})" style="flex:1; background: #333; color: white; height: 24px; padding: 0; font-size: 0.6rem;">✏️ Edit</button>
+                                <button class="settle-btn" onclick="deleteBet(${bet.id})" style="flex:1; background: #333; color: #ff4444; height: 24px; padding: 0; font-size: 0.6rem;">🗑️ Del</button>
+                            </div>
+                        ` : `
+                            <button class="settle-btn" onclick="deleteBet(${bet.id})" style="background: transparent; color: #666; font-size: 0.6rem;">🗑️ Remove</button>
+                        `}
+                    </div>
                 </td>
             </tr>
         `;

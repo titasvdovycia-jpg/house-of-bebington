@@ -20,7 +20,7 @@
 
   --transition-fast: 0.15s ease-out;
   --transition-smooth: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  --stocky-speed: 180s;
+  --stocky-speed: 300s;
 }
 
 * {

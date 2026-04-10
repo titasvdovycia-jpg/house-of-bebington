@@ -854,4 +854,366 @@ function updatePortfolio() {
                             </div>
                             <div style="display: flex; gap: 4px;">
                                 <button class="settle-btn" onclick="startEdit(${bet.id})" style="flex:1; background: #333; color: white; height: 24px; padding: 0; font-size: 0.6rem;">✏️ Edit</button>
-                                <button class="settle-btn" oncli
+                                <button class="settle-btn" onclick="deleteBet(${bet.id})" style="flex:1; background: #333; color: #ff4444; height: 24px; padding: 0; font-size: 0.6rem;">🗑️ Del</button>
+                            </div>
+                        ` : `
+                            <button class="settle-btn" onclick="deleteBet(${bet.id})" style="background: transparent; color: #666; font-size: 0.6rem;">🗑️ Remove</button>
+                        `}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    DOM.betHistoryTable.innerHTML = tableHtml || '<tr><td colspan="7" style="text-align:center; padding: 2rem; color: var(--text-secondary);">No bets logged yet.</td></tr>';
+    
+    // Summary
+    DOM.portTotalProfit.innerText = (totalProfit >= 0 ? '+' : '') + formatCurrency(totalProfit);
+    DOM.portTotalProfit.style.color = totalProfit >= 0 ? 'var(--accent-green)' : '#ff4444';
+    if(DOM.portActiveBets) DOM.portActiveBets.innerText = activeCount;
+    
+    const roi = totalStaked > 0 ? (totalProfit / totalStaked) * 100 : 0;
+    DOM.portRoi.innerText = roi.toFixed(2) + '%';
+    DOM.portRoi.style.color = roi >= 0 ? 'var(--accent-green)' : '#ff4444';
+
+    if (window.updateProfitChart) updateProfitChart();
+}
+
+function updateBankrollUI() {
+    const br = getGlobalBankroll();
+    DOM.bankrollAvailable.innerText = formatCurrency(br.available);
+    DOM.bankrollLocked.innerText = formatCurrency(br.locked);
+    DOM.bankrollGlobal.innerText = formatCurrency(br.total);
+
+    let gridHtml = '';
+    const sortedBookies = Object.keys(bookieBalances).sort();
+    
+    sortedBookies.forEach(b => {
+        const url = BOOKIE_SEARCH_URLS[b] ? BOOKIE_SEARCH_URLS[b].split('search')[0] : `https://www.google.com/search?q=${b}`;
+        gridHtml += `
+            <div class="bookie-balance-card">
+                <h4>
+                    ${b.toUpperCase()}
+                    <a href="${url}" target="_blank" style="text-decoration: none; font-size: 1.1rem;" title="Open Bookmaker">🔗</a>
+                </h4>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <span style="font-weight: bold; color: var(--text-secondary);">£</span>
+                    <input type="number" class="bookie-balance-input" value="${bookieBalances[b].toFixed(2)}" onchange="updateCustomBalance('${b}', this.value)" step="0.01" />
+                </div>
+            </div>
+        `;
+    });
+    DOM.bookieBalancesGrid.innerHTML = gridHtml;
+}
+
+window.updateCustomBalance = function(bookie, val) {
+    const pVal = parseFloat(val);
+    if (!isNaN(pVal) && pVal >= 0) {
+        bookieBalances[bookie] = pVal;
+        localStorage.setItem('arb_bookie_balances', JSON.stringify(bookieBalances));
+        updateBankrollUI();
+    }
+}
+
+function renderBlacklist() {
+    let ht = '';
+    systemBlacklist.forEach(b => {
+        ht += `<div class="blacklist-tag"><span>${b}</span><button onclick="removeBlacklist('${b}')">✕</button></div>`;
+    });
+    DOM.blacklistTags.innerHTML = ht;
+}
+
+window.removeBlacklist = function(bookie) {
+    systemBlacklist = systemBlacklist.filter(b => b !== bookie);
+    localStorage.setItem('arb_blacklist', JSON.stringify(systemBlacklist));
+    renderBlacklist();
+}
+
+DOM.addBlacklistBtn.addEventListener('click', () => {
+    const val = DOM.blacklistInput.value.trim().toLowerCase();
+    if (val && !systemBlacklist.includes(val)) {
+        systemBlacklist.push(val);
+        localStorage.setItem('arb_blacklist', JSON.stringify(systemBlacklist));
+        DOM.blacklistInput.value = '';
+        renderBlacklist();
+    }
+});
+
+DOM.navSettings.addEventListener('click', () => {
+    DOM.navSettings.classList.add('active');
+    DOM.navDashboard.classList.remove('active');
+    DOM.viewDashboard.style.display = 'none';
+    DOM.viewSettings.style.display = 'flex';
+    DOM.apiKeyInput.value = apiKey; // Show current key
+    DOM.tgTokenInput.value = tgToken;
+    DOM.tgChatIdInput.value = tgChatId;
+});
+
+DOM.saveSettingsBtn.addEventListener('click', () => {
+    apiKey = DOM.apiKeyInput.value.trim();
+    tgToken = DOM.tgTokenInput.value.trim();
+    tgChatId = DOM.tgChatIdInput.value.trim();
+    
+    if (apiKey) localStorage.setItem('arb_api_key', apiKey);
+    localStorage.setItem('tg_bot_token', tgToken);
+    localStorage.setItem('tg_chat_id', tgChatId);
+    
+    DOM.saveSettingsBtn.innerText = "Saved!";
+    setTimeout(() => DOM.saveSettingsBtn.innerText = "Save Settings", 2000);
+});
+
+DOM.findIdBtn.addEventListener('click', findChatId);
+
+DOM.autoScanToggle.addEventListener('change', (e) => {
+    updateTokenHealth();
+    if (e.target.checked) {
+        safeAutoScan(); // Run once immediately (if awake)
+        // 500 requests/month = 2 sports = 250 scans/month = ~8 scans/day
+        // To spread 8 scans across 15 waking hours -> 1 scan roughly every 2 hours (7200000 ms)
+        autoScanInterval = setInterval(safeAutoScan, 7200000);
+    } else {
+        clearInterval(autoScanInterval);
+        DOM.statusText.innerHTML = '<span class="dot" style="background:var(--accent-green);"></span> Scan Complete';
+    }
+});
+// Wrapper that ensures we only scan during UK Waking Hours (8 AM to 11 PM)
+function safeAutoScan() {
+    const ukTimeStr = new Date().toLocaleString("en-GB", { timeZone: "Europe/London", hour12: false, hour: "numeric" });
+    const ukHour = parseInt(ukTimeStr, 10);
+    
+    // If it's between 8 AM (08:00) and 10:59 PM (22:59)
+    if (ukHour >= 8 && ukHour < 23) {
+        fetchLiveArbs();
+    } else {
+        console.log("UK Sleep Hours: Skipping scan to save tokens.");
+        DOM.statusText.innerHTML = '<span class="dot" style="background:var(--text-secondary);"></span> Paused (UK Sleep Hrs)';
+    }
+}
+
+// --- UI Rendering Helpers ---
+function renderSportsGrid() {
+    const saved = JSON.parse(localStorage.getItem('selected_sports')) || ['basketball_nba', 'basketball_euroleague'];
+    
+    DOM.sportsGrid.innerHTML = SPORT_CONFIG.map(sport => `
+        <label class="sport-option">
+            <input type="checkbox" class="sport-checkbox" value="${sport.key}" ${saved.includes(sport.key) ? 'checked' : ''}>
+            ${sport.name}
+        </label>
+    `).join('');
+
+    // Add listeners to checkboxes
+    document.querySelectorAll('.sport-checkbox').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const selected = Array.from(document.querySelectorAll('.sport-checkbox:checked')).map(c => c.value);
+            localStorage.setItem('selected_sports', JSON.stringify(selected));
+            updateTokenHealth();
+        });
+    });
+}
+
+function updateTokenHealth() {
+    const selectedCount = document.querySelectorAll('.sport-checkbox:checked').length;
+    const scansPerDay = DOM.autoScanToggle.checked ? 8 : 1;
+    const regionsMultiplier = 2; // UK + EU combined
+    const monthlyUsage = selectedCount * scansPerDay * regionsMultiplier * 31;
+    const limit = 500;
+    
+    const usagePercent = Math.min((monthlyUsage / limit) * 100, 100);
+    const scansRemaining = Math.max(0, limit);
+    const daysLast = Math.floor(limit / (selectedCount * scansPerDay * regionsMultiplier));
+    const safetyDays = isFinite(daysLast) ? Math.min(daysLast, 31) : 31;
+
+    DOM.tokenUsageInfo.innerText = `Using ~${monthlyUsage} tokens/month`;
+    DOM.tokenDaysInfo.innerText = `Tokens will last ~${safetyDays} days`;
+    
+    DOM.healthProgress.style.width = `${usagePercent}%`;
+    
+    if (usagePercent < 70) {
+        DOM.healthStatusText.innerText = "Safe";
+        DOM.healthStatusText.className = "health-status-text safe";
+        DOM.healthProgress.style.background = "var(--accent-green)";
+    } else if (usagePercent < 100) {
+        DOM.healthStatusText.innerText = "Warning";
+        DOM.healthStatusText.className = "health-status-text warning";
+        DOM.healthProgress.style.background = "#ffaa44";
+    } else {
+        DOM.healthStatusText.innerText = "Danger";
+        DOM.healthStatusText.className = "health-status-text danger";
+        DOM.healthProgress.style.background = "#ff4444";
+    }
+}
+
+// Init - set settings value if exists
+DOM.apiKeyInput.value = apiKey;
+DOM.tgTokenInput.value = tgToken;
+DOM.tgChatIdInput.value = tgChatId;
+
+renderSportsGrid();
+updateTokenHealth();
+updateBankrollUI();
+
+window.updateProfitChart = function() {
+    if (!DOM.profitChart) return;
+    
+    // We want to graph Bankroll over time using betHistory
+    // Start with default bankroll (assume starting was total currently minus net profit)
+    let netProfit = 0;
+    const dataPoints = [];
+    const labels = [];
+    
+    // Reverse betHistory so oldest is first
+    const chronological = [...betHistory].reverse();
+    
+    // Initial State point
+    labels.push('Start');
+    dataPoints.push(0);
+
+    chronological.forEach(bet => {
+        if (bet.status === 'won') {
+            netProfit += (bet.possibleReturn - bet.totalStake);
+            labels.push(bet.date);
+            dataPoints.push(netProfit);
+        } else if (bet.status === 'lost') {
+            netProfit -= bet.totalStake;
+            labels.push(bet.date);
+            dataPoints.push(netProfit);
+        }
+    });
+
+    if (window.profitChartInstance) {
+        window.profitChartInstance.destroy();
+    }
+
+    const ctx = DOM.profitChart.getContext('2d');
+    window.profitChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Net Profit (£)',
+                data: dataPoints,
+                borderColor: '#00f3ff',
+                backgroundColor: 'rgba(0, 243, 255, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888' } },
+                x: { grid: { display: false }, ticks: { color: '#888', maxTicksLimit: 5 } }
+            }
+        }
+    });
+}
+
+// Ensure chart renders if there's history
+if (betHistory.length > 0) updateProfitChart();
+
+// --- Smart Auto-Settler ---
+DOM.autoSettleBtn.addEventListener('click', async () => {
+    DOM.autoSettleBtn.disabled = true;
+    DOM.autoSettleStatus.style.display = 'block';
+    DOM.autoSettleStatus.innerText = 'Checking for completed matches...';
+    await autoResolveBets();
+    DOM.autoSettleBtn.disabled = false;
+    DOM.autoSettleStatus.style.display = 'none';
+});
+
+async function autoResolveBets() {
+    const pendingBets = betHistory.filter(b => b.status === 'pending' && b.commence_time);
+    if (pendingBets.length === 0) return;
+
+    // Filter bets where commence_time is > 3 hours ago
+    const now = new Date();
+    const readyBets = pendingBets.filter(b => {
+        const kickOff = new Date(b.commence_time);
+        const hoursPassed = (now - kickOff) / (1000 * 60 * 60);
+        return hoursPassed >= 3;
+    });
+
+    if (readyBets.length === 0) return;
+
+    // Which sports do we need to check?
+    const sportsToCheck = [...new Set(readyBets.map(b => b.sport))];
+    
+    for (const sport of sportsToCheck) {
+        try {
+            const res = await fetch(`https://api.the-odds-api.com/v4/sports/${sport}/scores/?apiKey=${apiKey}&daysFrom=3`);
+            if (!res.ok) continue;
+            const scoresData = await res.json();
+            
+            // For each ready bet in this sport
+            const betsInSport = readyBets.filter(b => b.sport === sport);
+            for (const bet of betsInSport) {
+                // Find matching game
+                const homeTeam = bet.matchup.split(' vs ')[0];
+                const match = scoresData.find(m => m.home_team === homeTeam);
+                
+                if (match && match.completed) {
+                    // Determine winner
+                    let winner = '';
+                    if (match.scores && match.scores.length === 2) {
+                        const s1 = parseInt(match.scores[0].score);
+                        const s2 = parseInt(match.scores[1].score);
+                        if (s1 > s2) winner = match.scores[0].name;
+                        else if (s2 > s1) winner = match.scores[1].name;
+                        else winner = 'Draw';
+                    }
+
+                    if (winner) {
+                        // Find winning leg
+                        const winLegIdx = bet.legs.findIndex(l => l.outcome === winner || l.outcome.includes(winner));
+                        if (winLegIdx !== -1) {
+                            settleBet(bet.id, 'won', winLegIdx);
+                            sendTelegramSettlement(bet, 'won', winLegIdx);
+                        } else {
+                            // If outcome not found but game is complete, mark as lost
+                            settleBet(bet.id, 'lost');
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("AutoSettle Error for " + sport, e);
+        }
+    }
+}
+
+async function sendTelegramSettlement(bet, result, winningLegIndex) {
+    if (!tgToken || !tgChatId) return;
+    
+    let reportText = `✅ *Bet Settled Automatically!*\n\n`;
+    reportText += `Match: ${bet.matchup}\n`;
+    
+    if (result === 'won') {
+        const winningLeg = bet.legs[winningLegIndex];
+        const payout = winningLeg.stake * winningLeg.odds;
+        const netProfit = payout - bet.totalStake;
+        const cb = cleanBookie(winningLeg.bookmaker);
+        const newBalance = bookieBalances[cb];
+        
+        reportText += `Winner: ${winningLeg.outcome}\n`;
+        reportText += `Net Profit: +£${netProfit.toFixed(2)}\n`;
+        reportText += `Funds injected into: *${winningLeg.bookmaker}*\n\n`;
+        reportText += `💡 *Rebalancing Advice*: Your ${winningLeg.bookmaker} balance is now £${newBalance.toFixed(2)}. Suggestion: Withdraw £${(payout * 0.75).toFixed(2)} to your bank module to top up heavily depleted accounts.`;
+    }
+
+    let cleanToken = tgToken.replace(/[^a-zA-Z0-9:\-_]/g, '');
+    let cleanChat = tgChatId.replace(/[^0-9\-]/g, '');
+    if (cleanToken.toLowerCase().startsWith('bot')) cleanToken = cleanToken.substring(3);
+
+    const telegramUrl = `https://api.telegram.org/bot${cleanToken}/sendMessage?chat_id=${cleanChat}&text=${encodeURIComponent(reportText)}&parse_mode=Markdown`;
+    fetch(telegramUrl).catch(e => console.error(e));
+}
+
+// Inject AutoSettle to safeAutoScan to let it run passively efficiently
+const originalSafeAutoScan = safeAutoScan;
+safeAutoScan = function() {
+    originalSafeAutoScan();
+    autoResolveBets();
+}

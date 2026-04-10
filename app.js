@@ -36,44 +36,37 @@ function calculateStakes(totalProb, legs, strategy = 'arb') {
         fractions = legs.map(leg => leg.bookmaker === longshot.bookmaker ? (1 / longshot.odds) : (1 - (1 / longshot.odds)));
     }
 
-    // Determine the max possible total investment based on individual bookie balances
-    let maxTotalInvestment = Infinity;
+    // Fixed Baseline as per user request (£10)
+    const fixedBaseline = 10;
+    
+    // Check if user has enough balance (purely for the warning, does not affect stakes)
+    let isZeroBalance = false;
     let bottleneckBookie = '';
+    let depositNeeded = 0;
 
     legs.forEach((leg, idx) => {
         const cb = cleanBookie(leg.bookmaker);
         const balance = bookieBalances[cb] || 0;
-        const requiredFraction = fractions[idx];
+        const required = fixedBaseline * fractions[idx];
         
-        if (requiredFraction > 0) {
-            const maxForThisLeg = balance / requiredFraction;
-            if (maxForThisLeg < maxTotalInvestment) {
-                maxTotalInvestment = maxForThisLeg;
+        if (balance < required) {
+            isZeroBalance = true;
+            if (!bottleneckBookie || (required - balance) > depositNeeded) {
                 bottleneckBookie = cb;
+                depositNeeded = required - balance;
             }
         }
     });
-
-    // Theoretical Baseline (Ideal)
-    const idealBaseline = 100;
-    const isZeroBalance = maxTotalInvestment === 0;
-    
-    // Calculate how much is missing for the bottleneck bookie to reach the ideal baseline
-    let depositNeeded = 0;
-    if (isZeroBalance && bottleneckBookie) {
-        const idx = legs.findIndex(l => cleanBookie(l.bookmaker) === bottleneckBookie);
-        depositNeeded = idealBaseline * fractions[idx];
-    }
 
     return {
         isZeroBalance,
         bottleneckBookie,
         depositNeeded,
-        idealInvestment: idealBaseline,
+        idealInvestment: fixedBaseline,
         stakedLegs: legs.map((leg, idx) => ({
             ...leg,
-            actualStake: maxTotalInvestment * fractions[idx],
-            idealStake: idealBaseline * fractions[idx]
+            actualStake: fixedBaseline * fractions[idx], // Now "Actual" and "Ideal" are the same £10
+            idealStake: fixedBaseline * fractions[idx]
         }))
     };
 }
@@ -138,6 +131,16 @@ let tgChatId = '5761611308';
 let betHistory = JSON.parse(localStorage.getItem('arb_bet_history')) || [];
 let loadedMatches = [];
 let autoScanInterval = null;
+
+// Region Mapping for Sorting
+const BOOKIE_REGIONS = {
+    '888sport': 'UK', 'william hill': 'UK', 'paddy power': 'UK', 'sky bet': 'UK', 
+    'ladbrokes': 'UK', 'coral': 'UK', 'unibet': 'UK', 'betfred': 'UK', 
+    'bet victor': 'UK', 'smarkets': 'UK', 'matchbook': 'UK', 'boylesports': 'UK', 
+    'betway': 'UK', 'grosvenor': 'UK', 'livescore': 'UK', 'virgin': 'UK', 
+    '10bet': 'UK', 'spreadex': 'UK', 'kwiff': 'UK',
+    'coolbet': 'EU', 'betclic': 'EU', 'leovegas': 'EU', 'mr green': 'EU', 'casumo': 'EU'
+};
 
 // Ensure default bookies exist in balances
 Object.keys(BOOKIE_SEARCH_URLS).forEach(b => {
@@ -1049,19 +1052,37 @@ function updateBankrollUI() {
     DOM.bankrollGlobal.innerText = formatCurrency(br.total);
 
     let gridHtml = '';
-    const sortedBookies = Object.keys(bookieBalances).sort();
+    
+    // Ensure all bookies from our master list exist in balances
+    const allBookieKeys = Object.keys(BOOKIE_SEARCH_URLS);
+    allBookieKeys.forEach(bk => {
+        if (bookieBalances[bk] === undefined) bookieBalances[bk] = 0;
+    });
+
+    // Sort: Region (UK first), then Alphabetical
+    const sortedBookies = allBookieKeys.sort((a, b) => {
+        const regA = BOOKIE_REGIONS[a] || 'EU';
+        const regB = BOOKIE_REGIONS[b] || 'EU';
+        
+        if (regA === 'UK' && regB !== 'UK') return -1;
+        if (regA !== 'UK' && regB === 'UK') return 1;
+        
+        return a.localeCompare(b);
+    });
     
     sortedBookies.forEach(b => {
         const url = BOOKIE_SEARCH_URLS[b] ? BOOKIE_SEARCH_URLS[b].split('search')[0] : `https://www.google.com/search?q=${b}`;
+        const region = BOOKIE_REGIONS[b] || 'EU';
         gridHtml += `
             <div class="bookie-balance-card">
-                <h4>
-                    ${b.toUpperCase()}
-                    <a href="${url}" target="_blank" style="text-decoration: none; font-size: 1.1rem;" title="Open Bookmaker">🔗</a>
-                </h4>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <span style="font-size: 0.6rem; color: var(--accent-blue); font-weight: bold; border: 1px solid var(--accent-blue-dim); padding: 1px 4px; border-radius: 4px;">${region}</span>
+                    <a href="${url}" target="_blank" style="text-decoration: none; font-size: 1rem;" title="Open Bookmaker">🔗</a>
+                </div>
+                <h4 style="margin-top: 0;">${b.toUpperCase()}</h4>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                     <span style="font-weight: bold; color: var(--text-secondary);">£</span>
-                    <input type="number" class="bookie-balance-input" value="${bookieBalances[b].toFixed(2)}" onchange="updateCustomBalance('${b}', this.value)" step="0.01" />
+                    <input type="number" class="bookie-balance-input" value="${(bookieBalances[b] || 0).toFixed(2)}" onchange="updateCustomBalance('${b}', this.value)" step="0.01" />
                 </div>
             </div>
         `;

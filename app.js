@@ -13,33 +13,50 @@ function calculateArbitrage(legs) {
     };
 }
 
-function calculateStakes(globalBankroll, totalProb, legs, strategy = 'arb') {
+function calculateStakes(totalProb, legs, strategy = 'arb') {
+    let fractions = [];
+
     if (strategy === 'arb') {
-        // Equal profit on all sides
-        return legs.map(leg => {
-            const prob = 1 / leg.odds;
-            const stake = (globalBankroll * prob) / totalProb;
-            return { ...leg, stake };
-        });
+        fractions = legs.map(leg => ((1 / leg.odds) / totalProb));
     } else if (strategy === 'under') {
-        // UNDER-HEDGING: 
-        // We stake just enough on the longshot (higher odds) to break even, 
-        // and put the rest on the favorite to maximize profit.
         const sorted = [...legs].sort((a, b) => b.odds - a.odds);
         const longshot = sorted[0];
-        const favorite = sorted[1];
-        
-        const longshotStake = globalBankroll / longshot.odds;
-        const favoriteStake = globalBankroll - longshotStake;
-        
-        return legs.map(leg => {
-            const stake = (leg.bookmaker === longshot.bookmaker) ? longshotStake : favoriteStake;
-            return { ...leg, stake };
-        });
+        fractions = legs.map(leg => leg.bookmaker === longshot.bookmaker ? (1 / longshot.odds) : (1 - (1 / longshot.odds)));
     }
+
+    // Determine the max possible total investment based on individual bookie balances
+    let maxTotalInvestment = Infinity;
+    let bottleneckBookie = '';
+
+    legs.forEach((leg, idx) => {
+        const cb = cleanBookie(leg.bookmaker);
+        const balance = bookieBalances[cb] || 0;
+        const requiredFraction = fractions[idx];
+        
+        if (requiredFraction > 0) {
+            const maxForThisLeg = balance / requiredFraction;
+            if (maxForThisLeg < maxTotalInvestment) {
+                maxTotalInvestment = maxForThisLeg;
+                bottleneckBookie = cb;
+            }
+        }
+    });
+
+    // If max is 0, they have no money in at least one required account.
+    // We return stakes as 0, but we can pass back a flag.
+    const isZeroBalance = maxTotalInvestment === 0;
+
+    return {
+        isZeroBalance,
+        bottleneckBookie,
+        stakedLegs: legs.map((leg, idx) => ({
+            ...leg,
+            stake: maxTotalInvestment * fractions[idx]
+        }))
+    };
 }
 
-function calculateKelly(match, bankroll) {
+function calculateKelly(match) {
     // Kelly Criterion: f* = (bp - q) / b
     // b = decimal odds - 1
     // p = "True" probability (We use average market prob)
@@ -54,7 +71,7 @@ function calculateKelly(match, bankroll) {
         const p = (1 / leg.odds) / avgProbTotal; // Normalized probability
         const q = 1 - p;
         const f = (b * p - q) / b;
-        const suggestedStake = Math.max(0, f * bankroll * 0.1); // Use quarter-kelly (0.1) for safety
+        const suggestedStake = Math.max(0, f * getGlobalBankroll().total * 0.1); // Use quarter-kelly (0.1) on Total Bankroll
         return { ...leg, kellyStake: suggestedStake, kellyPercent: (f * 100).toFixed(1) };
     });
 }
@@ -62,7 +79,7 @@ function calculateKelly(match, bankroll) {
 const formatCurrency = (val) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(val);
 const formatOdds = (val) => val.toFixed(2);
 
-const BOOKIE_BLACKLIST = ['betfair']; 
+let systemBlacklist = JSON.parse(localStorage.getItem('arb_blacklist')) || ['betfair'];
 
 // Bookmaker Search Patterns (Level 1 Automation)
 const BOOKIE_SEARCH_URLS = {
@@ -91,7 +108,7 @@ const BOOKIE_SEARCH_URLS = {
 };
 
 // App State
-let currentBankroll = parseFloat(localStorage.getItem('arb_bankroll')) || 1000;
+let bookieBalances = JSON.parse(localStorage.getItem('arb_bookie_balances')) || {};
 let apiKey = localStorage.getItem('arb_api_key') || '6cbd5867fac1c7ea342a271600898dd9'; 
 let tgToken = localStorage.getItem('tg_bot_token') || '8393406772:AAEEvxoyvv5weSH3-gDEC3fk6ldskXP6AT0';
 let tgChatId = '5761611308'; 
@@ -99,6 +116,17 @@ let tgChatId = '5761611308';
 let betHistory = JSON.parse(localStorage.getItem('arb_bet_history')) || [];
 let loadedMatches = [];
 let autoScanInterval = null;
+
+// Ensure default bookies exist in balances
+Object.keys(BOOKIE_SEARCH_URLS).forEach(b => {
+    if (bookieBalances[b] === undefined) bookieBalances[b] = 0;
+});
+
+function getGlobalBankroll() {
+    let available = Object.values(bookieBalances).reduce((sum, val) => sum + val, 0);
+    let locked = betHistory.filter(b => b.status === 'pending').reduce((sum, b) => sum + b.totalStake, 0);
+    return { available, locked, total: available + locked };
+}
 
 const SPORT_CONFIG = [
     { key: 'basketball_nba', name: 'NBA (Basketball)' },
@@ -116,6 +144,16 @@ const SPORT_CONFIG = [
 const DOM = {
     arbFeed: document.getElementById('arb-feed'),
     globalBankroll: document.getElementById('global-bankroll'),
+    bankrollAvailable: document.getElementById('bankroll-available'),
+    bankrollLocked: document.getElementById('bankroll-locked'),
+    bankrollGlobal: document.getElementById('bankroll-global'),
+    bookieBalancesGrid: document.getElementById('bookie-balances-grid'),
+    blacklistInput: document.getElementById('blacklist-input'),
+    addBlacklistBtn: document.getElementById('add-blacklist-btn'),
+    blacklistTags: document.getElementById('blacklist-tags'),
+    autoSettleBtn: document.getElementById('auto-settle-btn'),
+    autoSettleStatus: document.getElementById('auto-settle-status'),
+    profitChart: document.getElementById('profitChart'),
     activeArbsCount: document.getElementById('active-arbs-count'),
     bestMargin: document.getElementById('best-margin'),
     refreshBtn: document.getElementById('refresh-btn'),
@@ -125,14 +163,17 @@ const DOM = {
     // Nav
     navDashboard: document.getElementById('nav-dashboard'),
     navPortfolio: document.getElementById('nav-portfolio'),
+    navBankroll: document.getElementById('nav-bankroll'),
     navSettings: document.getElementById('nav-settings'),
     viewDashboard: document.getElementById('view-dashboard'),
     viewPortfolio: document.getElementById('view-portfolio'),
+    viewBankroll: document.getElementById('view-bankroll'),
     viewSettings: document.getElementById('view-settings'),
     
     // Portfolio Metrics
     portTotalProfit: document.getElementById('port-total-profit'),
     portRoi: document.getElementById('port-roi'),
+    portActiveBets: document.getElementById('port-active-bets'),
     betHistoryTable: document.getElementById('bet-history-table'),
     
     // Settings
@@ -276,7 +317,7 @@ async function fetchLiveArbs() {
         }
 
         const fetchPromises = selectedSports.map(sport => {
-            const targetUrl = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&regions=uk&markets=h2h&oddsFormat=decimal`;
+            const targetUrl = `https://api.the-odds-api.com/v4/sports/${sport}/odds/?apiKey=${apiKey}&regions=uk,eu&markets=h2h&oddsFormat=decimal`;
             return fetch(targetUrl).then(async res => {
                 if (!res.ok) {
                     const errText = await res.text();
@@ -296,8 +337,8 @@ async function fetchLiveArbs() {
         const matches = [];
 
         data.forEach(game => {
-            // NUCLEAR OPTION: Scrub Betfair from the raw data before ANY processing
-            game.bookmakers = game.bookmakers.filter(b => !BOOKIE_BLACKLIST.some(black => b.title.toLowerCase().includes(black)));
+            // NUCLEAR OPTION: Scrub Betfair & any dynamically blacklisted bookies
+            game.bookmakers = game.bookmakers.filter(b => !systemBlacklist.some(black => b.title.toLowerCase().includes(black.toLowerCase())));
 
             const outcomeNames = [...new Set(game.bookmakers.flatMap(b => b.markets.find(m => m.key === 'h2h')?.outcomes.map(o => o.name) || []))];
             if (outcomeNames.length < 2) return;
@@ -419,11 +460,15 @@ function renderArbCard(match, index, strategy = 'arb') {
     const badgeBorder = isArb ? '1px solid rgba(0, 255, 136, 0.2)' : '1px solid var(--border-color)';
     const cardBorderHighlight = isArb ? 'var(--accent-green)' : 'rgba(255,255,255,0.1)';
 
-    const stakedLegs = calculateStakes(currentBankroll, match.totalProb, match.legs, strategy);
-    const kellyInfo = calculateKelly(match, currentBankroll);
+    const stakeResult = calculateStakes(match.totalProb, match.legs, strategy);
+    const stakedLegs = stakeResult.stakedLegs;
+    const isZeroBalance = stakeResult.isZeroBalance;
+    const kellyInfo = calculateKelly(match);
     
+    // Calculate total investment and returns
+    const totalInvestment = stakedLegs.reduce((sum, l) => sum + l.stake, 0);
     const guaranteedReturn = stakedLegs[0].stake * stakedLegs[0].odds;
-    const profit = guaranteedReturn - currentBankroll;
+    const profit = guaranteedReturn - totalInvestment;
 
     let legsHtml = '';
     const mainTeam = match.matchup.split(' vs ')[0]; // Use first team for search
@@ -448,6 +493,10 @@ function renderArbCard(match, index, strategy = 'arb') {
                 <div class="leg-bet-amount">
                     <span class="bet-label">Stake</span>
                     <span class="bet-value">${formatCurrency(leg.stake)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-top: 4px;">
+                    <span style="color: var(--text-secondary);">If Wins:</span>
+                    <span style="color: var(--accent-green); font-weight: bold;">${formatCurrency(leg.stake * leg.odds)}</span>
                 </div>
                 <div style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--text-secondary); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 4px;">
                     Kelly: ${k.kellyPercent}% | True Prob: ${( (1/leg.odds)/match.totalProb * 100).toFixed(0)}%
@@ -480,18 +529,25 @@ function renderArbCard(match, index, strategy = 'arb') {
                 <button class="strat-btn ${strategy === 'under' ? 'active' : ''}" onclick="updateMatchStrategy('${match.id}', 'under')">Under-Hedge</button>
             </div>
 
+            ${isZeroBalance ? `<div style="background: rgba(255, 68, 68, 0.1); color: #ff4444; padding: 0.5rem; text-align: center; font-size: 0.8rem; font-weight: bold; border-top: 1px solid rgba(255, 68, 68, 0.3);">⚠️ Deposit Required in ${stakeResult.bottleneckBookie.toUpperCase()}</div>` : ''}
+
             <div class="arb-body" style="grid-template-columns: repeat(${match.legs.length}, 1fr);">
                 ${legsHtml}
             </div>
             
             <div style="background: rgba(0,0,0,0.2); padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                 <div style="display: flex; flex-direction: column;">
-                    <span style="color: var(--text-secondary); font-size: 0.75rem;">Total Return</span>
-                    <strong style="color: var(--text-primary); font-size: 1rem;">${formatCurrency(guaranteedReturn)}</strong>
+                    <span style="color: var(--text-secondary); font-size: 0.75rem;">Strategy Return</span>
+                    <strong style="color: var(--text-primary); font-size: 1rem;">
+                        ${strategy === 'under' ? 
+                            `${formatCurrency(Math.min(...stakedLegs.map(l => l.stake * l.odds)))} - ${formatCurrency(Math.max(...stakedLegs.map(l => l.stake * l.odds)))}` : 
+                            formatCurrency(guaranteedReturn)
+                        }
+                    </strong>
                 </div>
                 <div style="display: flex; gap: 1rem; align-items: center;">
                     <span style="color: ${profit >= 0 ? 'var(--accent-green)' : '#ff4444'}; font-weight: 700;">
-                        ${profit >= 0 ? '+' : ''} ${formatCurrency(profit)}
+                        ${strategy === 'under' ? 'Variable' : (profit >= 0 ? '+' : '') + formatCurrency(profit)}
                     </span>
                     <button class="log-btn" onclick="logBet('${match.id}', '${strategy}')">Log Bet</button>
                 </div>
@@ -528,6 +584,37 @@ function updateDashboard() {
 
     DOM.arbFeed.innerHTML = html;
     
+    // Update Ticker
+    const tickerEl = document.getElementById('odds-ticker');
+    const tickerWrap = document.getElementById('ticker-wrap');
+    if (tickerEl && tickerWrap) {
+        tickerWrap.style.display = 'block';
+        let tickerHtml = '';
+        
+        // Take up to 15 best matches for the ticker
+        const tickerMatches = loadedMatches.slice(0, 15);
+        
+        tickerMatches.forEach(match => {
+            let legText = match.legs.map((leg, idx) => {
+                const isUnderdog = idx > 0; // rough heuristic
+                return `<span class="ticker-odds ${isUnderdog ? 'underdog' : ''}">${leg.outcome} ${leg.odds.toFixed(2)}</span>`;
+            }).join(' <span style="color:#555">|</span> ');
+
+            tickerHtml += `
+                <div class="ticker-item">
+                    <span class="ticker-team">${match.matchup}</span>
+                    <span style="color:#555; margin: 0 4px;">:</span>
+                    ${legText}
+                    <span class="ticker-divider">♦</span>
+                </div>
+            `;
+        });
+        
+        // Duplicate the html string a few times so the ticker has enough content to scroll infinitely 
+        // without showing a gap before the animation loops
+        tickerEl.innerHTML = tickerHtml + tickerHtml + tickerHtml;
+    }
+
     // Update Metrics
     DOM.activeArbsCount.innerText = arbCount;
     DOM.activeArbsCount.className = arbCount > 0 ? "metric-value text-glow-green" : "metric-value";
@@ -541,63 +628,100 @@ function updateDashboard() {
 }
 
 // --- Navigation & Events ---
-DOM.globalBankroll.addEventListener('input', (e) => {
-    const val = parseFloat(e.target.value);
-    if (!isNaN(val) && val > 0) {
-        currentBankroll = val;
-        localStorage.setItem('arb_bankroll', currentBankroll);
-        updateDashboard();
-        updatePortfolio();
-    }
-});
-
+// --- Navigation & Events ---
 DOM.refreshBtn.addEventListener('click', fetchLiveArbs);
 
 DOM.navDashboard.addEventListener('click', () => {
     DOM.navDashboard.classList.add('active');
     DOM.navPortfolio.classList.remove('active');
+    DOM.navBankroll.classList.remove('active');
     DOM.navSettings.classList.remove('active');
     DOM.viewDashboard.style.display = 'block';
     DOM.viewPortfolio.style.display = 'none';
+    DOM.viewBankroll.style.display = 'none';
     DOM.viewSettings.style.display = 'none';
+    updateDashboard();
 });
 
 DOM.navPortfolio.addEventListener('click', () => {
     DOM.navPortfolio.classList.add('active');
     DOM.navDashboard.classList.remove('active');
+    DOM.navBankroll.classList.remove('active');
     DOM.navSettings.classList.remove('active');
     DOM.viewDashboard.style.display = 'none';
     DOM.viewPortfolio.style.display = 'block';
+    DOM.viewBankroll.style.display = 'none';
     DOM.viewSettings.style.display = 'none';
     updatePortfolio();
+});
+
+DOM.navBankroll.addEventListener('click', () => {
+    DOM.navBankroll.classList.add('active');
+    DOM.navDashboard.classList.remove('active');
+    DOM.navPortfolio.classList.remove('active');
+    DOM.navSettings.classList.remove('active');
+    DOM.viewDashboard.style.display = 'none';
+    DOM.viewPortfolio.style.display = 'none';
+    DOM.viewBankroll.style.display = 'block';
+    DOM.viewSettings.style.display = 'none';
+    updateBankrollUI();
+});
+
+DOM.navSettings.addEventListener('click', () => {
+    DOM.navSettings.classList.add('active');
+    DOM.navDashboard.classList.remove('active');
+    DOM.navPortfolio.classList.remove('active');
+    DOM.navBankroll.classList.remove('active');
+    DOM.viewDashboard.style.display = 'none';
+    DOM.viewPortfolio.style.display = 'none';
+    DOM.viewBankroll.style.display = 'none';
+    DOM.viewSettings.style.display = 'flex';
+    DOM.apiKeyInput.value = apiKey; 
+    DOM.tgTokenInput.value = tgToken;
+    DOM.tgChatIdInput.value = tgChatId;
+    renderBlacklist();
 });
 
 function logBet(matchId, strategy) {
     const match = loadedMatches.find(m => m.id === matchId);
     if (!match) return;
 
-    const stakes = calculateStakes(currentBankroll, match.totalProb, match.legs, strategy);
+    const stakeResult = calculateStakes(match.totalProb, match.legs, strategy);
+    if (stakeResult.isZeroBalance) {
+        alert("Insufficient funds! Please deposit into " + stakeResult.bottleneckBookie.toUpperCase());
+        return;
+    }
+
+    const stakes = stakeResult.stakedLegs;
     const guaranteedReturn = (stakes[0].stake * stakes[0].odds);
     
+    // Deduct from bookmaker balances
+    stakes.forEach(leg => {
+        const cb = cleanBookie(leg.bookmaker);
+        bookieBalances[cb] -= leg.stake;
+    });
+    localStorage.setItem('arb_bookie_balances', JSON.stringify(bookieBalances));
+
     const newBet = {
         id: Date.now(),
         date: new Date().toLocaleDateString(),
+        commence_time: match.time, // For smart auto-settle later
         matchup: match.matchup,
         sport: match.sport,
         legs: stakes,
-        totalStake: currentBankroll,
+        totalStake: stakes.reduce((sum, l) => sum + l.stake, 0),
         possibleReturn: guaranteedReturn,
+        strategy: strategy,
         status: 'pending'
     };
 
     betHistory.unshift(newBet);
     localStorage.setItem('arb_bet_history', JSON.stringify(betHistory));
     
-    // Deduct from bankroll temporarily? No, usually hedge bettors keep bankroll as "active funds"
-    // We just log it.
-    
-    alert("Bet Logged! Check the Portfolio tab to track results.");
+    alert("Bet Logged! Bankroll balances deducted. Check Portfolio.");
     updatePortfolio();
+    updateBankrollUI();
+    updateDashboard(); // Refresh cards to show new limits
 }
 
 function deleteBet(id) {
@@ -648,23 +772,26 @@ function saveEdit(id) {
     updateDashboard();
 }
 
-function settleBet(id, result) {
+function settleBet(id, result, winningLegIndex = null) {
     const bet = betHistory.find(b => b.id === id);
     if (!bet || bet.status !== 'pending') return;
 
     bet.status = result;
     
     if (result === 'won') {
-        const netProfit = bet.possibleReturn - bet.totalStake;
-        currentBankroll += netProfit;
-    } else {
-        currentBankroll -= bet.totalStake;
+        // If we know which leg won (auto-settler) or manual selection
+        // For Equal Arb, any leg gives the same return roughly.
+        const winningLeg = winningLegIndex !== null ? bet.legs[winningLegIndex] : bet.legs[0];
+        const payout = winningLeg.stake * winningLeg.odds;
+        const cb = cleanBookie(winningLeg.bookmaker);
+        
+        bookieBalances[cb] += payout;
     }
 
-    localStorage.setItem('arb_bankroll', currentBankroll);
+    localStorage.setItem('arb_bookie_balances', JSON.stringify(bookieBalances));
     localStorage.setItem('arb_bet_history', JSON.stringify(betHistory));
-    DOM.globalBankroll.value = currentBankroll.toFixed(2);
     updatePortfolio();
+    updateBankrollUI();
     updateDashboard();
 }
 
@@ -720,139 +847,11 @@ function updatePortfolio() {
                     <div style="display: flex; flex-direction: column; gap: 4px;">
                         ${bet.status === 'pending' ? `
                             <div style="display: flex; gap: 4px;">
-                                <button class="settle-btn settle-won" onclick="settleBet(${bet.id}, 'won')" style="flex:1">Won</button>
-                                <button class="settle-btn settle-lost" onclick="settleBet(${bet.id}, 'lost')" style="flex:1">Lost</button>
+                                ${bet.legs.map((l, idx) => `
+                                    <button class="settle-btn settle-won" onclick="settleBet(${bet.id}, 'won', ${idx})" style="flex:1; font-size: 0.6rem" title="${l.bookmaker} Won">W${idx+1}</button>
+                                `).join('')}
+                                <button class="settle-btn settle-lost" onclick="settleBet(${bet.id}, 'lost')" style="flex:1; background: #444;">Tie/Loss</button>
                             </div>
                             <div style="display: flex; gap: 4px;">
                                 <button class="settle-btn" onclick="startEdit(${bet.id})" style="flex:1; background: #333; color: white; height: 24px; padding: 0; font-size: 0.6rem;">✏️ Edit</button>
-                                <button class="settle-btn" onclick="deleteBet(${bet.id})" style="flex:1; background: #333; color: #ff4444; height: 24px; padding: 0; font-size: 0.6rem;">🗑️ Del</button>
-                            </div>
-                        ` : `
-                            <button class="settle-btn" onclick="deleteBet(${bet.id})" style="background: transparent; color: #666; font-size: 0.6rem;">🗑️ Remove</button>
-                        `}
-                    </div>
-                </td>
-            </tr>
-        `;
-    }).join('');
-
-    DOM.betHistoryTable.innerHTML = tableHtml || '<tr><td colspan="7" style="text-align:center; padding: 2rem; color: var(--text-secondary);">No bets logged yet.</td></tr>';
-    
-    DOM.portTotalProfit.innerText = formatCurrency(totalProfit);
-    DOM.portTotalProfit.style.color = totalProfit >= 0 ? 'var(--accent-green)' : '#ff4444';
-    
-    const roi = totalStaked > 0 ? (totalProfit / totalStaked) * 100 : 0;
-    DOM.portRoi.innerText = `${roi.toFixed(2)}%`;
-    document.getElementById('port-active-bets').innerText = activeCount;
-}
-
-DOM.navSettings.addEventListener('click', () => {
-    DOM.navSettings.classList.add('active');
-    DOM.navDashboard.classList.remove('active');
-    DOM.viewDashboard.style.display = 'none';
-    DOM.viewSettings.style.display = 'flex';
-    DOM.apiKeyInput.value = apiKey; // Show current key
-    DOM.tgTokenInput.value = tgToken;
-    DOM.tgChatIdInput.value = tgChatId;
-});
-
-DOM.saveSettingsBtn.addEventListener('click', () => {
-    apiKey = DOM.apiKeyInput.value.trim();
-    tgToken = DOM.tgTokenInput.value.trim();
-    tgChatId = DOM.tgChatIdInput.value.trim();
-    
-    if (apiKey) localStorage.setItem('arb_api_key', apiKey);
-    localStorage.setItem('tg_bot_token', tgToken);
-    localStorage.setItem('tg_chat_id', tgChatId);
-    
-    DOM.saveSettingsBtn.innerText = "Saved!";
-    setTimeout(() => DOM.saveSettingsBtn.innerText = "Save Settings", 2000);
-});
-
-DOM.findIdBtn.addEventListener('click', findChatId);
-
-DOM.autoScanToggle.addEventListener('change', (e) => {
-    updateTokenHealth();
-    if (e.target.checked) {
-        safeAutoScan(); // Run once immediately (if awake)
-        // 500 requests/month = 2 sports = 250 scans/month = ~8 scans/day
-        // To spread 8 scans across 15 waking hours -> 1 scan roughly every 2 hours (7200000 ms)
-        autoScanInterval = setInterval(safeAutoScan, 7200000);
-    } else {
-        clearInterval(autoScanInterval);
-        DOM.statusText.innerHTML = '<span class="dot" style="background:var(--accent-green);"></span> Scan Complete';
-    }
-});
-// Wrapper that ensures we only scan during UK Waking Hours (8 AM to 11 PM)
-function safeAutoScan() {
-    const ukTimeStr = new Date().toLocaleString("en-GB", { timeZone: "Europe/London", hour12: false, hour: "numeric" });
-    const ukHour = parseInt(ukTimeStr, 10);
-    
-    // If it's between 8 AM (08:00) and 10:59 PM (22:59)
-    if (ukHour >= 8 && ukHour < 23) {
-        fetchLiveArbs();
-    } else {
-        console.log("UK Sleep Hours: Skipping scan to save tokens.");
-        DOM.statusText.innerHTML = '<span class="dot" style="background:var(--text-secondary);"></span> Paused (UK Sleep Hrs)';
-    }
-}
-
-// --- UI Rendering Helpers ---
-function renderSportsGrid() {
-    const saved = JSON.parse(localStorage.getItem('selected_sports')) || ['basketball_nba', 'basketball_euroleague'];
-    
-    DOM.sportsGrid.innerHTML = SPORT_CONFIG.map(sport => `
-        <label class="sport-option">
-            <input type="checkbox" class="sport-checkbox" value="${sport.key}" ${saved.includes(sport.key) ? 'checked' : ''}>
-            ${sport.name}
-        </label>
-    `).join('');
-
-    // Add listeners to checkboxes
-    document.querySelectorAll('.sport-checkbox').forEach(cb => {
-        cb.addEventListener('change', () => {
-            const selected = Array.from(document.querySelectorAll('.sport-checkbox:checked')).map(c => c.value);
-            localStorage.setItem('selected_sports', JSON.stringify(selected));
-            updateTokenHealth();
-        });
-    });
-}
-
-function updateTokenHealth() {
-    const selectedCount = document.querySelectorAll('.sport-checkbox:checked').length;
-    const scansPerDay = DOM.autoScanToggle.checked ? 8 : 1;
-    const monthlyUsage = selectedCount * scansPerDay * 31;
-    const limit = 500;
-    
-    const usagePercent = Math.min((monthlyUsage / limit) * 100, 100);
-    const scansRemaining = Math.max(0, limit);
-    const daysLast = Math.floor(limit / (selectedCount * scansPerDay));
-    const safetyDays = isFinite(daysLast) ? Math.min(daysLast, 31) : 31;
-
-    DOM.tokenUsageInfo.innerText = `Using ~${monthlyUsage} tokens/month`;
-    DOM.tokenDaysInfo.innerText = `Tokens will last ~${safetyDays} days`;
-    
-    DOM.healthProgress.style.width = `${usagePercent}%`;
-    
-    if (usagePercent < 70) {
-        DOM.healthStatusText.innerText = "Safe";
-        DOM.healthStatusText.className = "health-status-text safe";
-        DOM.healthProgress.style.background = "var(--accent-green)";
-    } else if (usagePercent < 100) {
-        DOM.healthStatusText.innerText = "Warning";
-        DOM.healthStatusText.className = "health-status-text warning";
-        DOM.healthProgress.style.background = "#ffaa44";
-    } else {
-        DOM.healthStatusText.innerText = "Danger";
-        DOM.healthStatusText.className = "health-status-text danger";
-        DOM.healthProgress.style.background = "#ff4444";
-    }
-}
-
-// Init - set settings value if exists
-DOM.apiKeyInput.value = apiKey;
-DOM.tgTokenInput.value = tgToken;
-DOM.tgChatIdInput.value = tgChatId;
-
-renderSportsGrid();
-updateTokenHealth();
+                                <button class="settle-btn" oncli

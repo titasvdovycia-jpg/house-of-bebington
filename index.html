@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div class="app-container">
@@ -20,9 +21,17 @@
       <nav class="nav-links">
         <button id="nav-dashboard" class="nav-btn active">Dashboard</button>
         <button id="nav-portfolio" class="nav-btn">Portfolio</button>
+        <button id="nav-bankroll" class="nav-btn">Bankroll</button>
         <button id="nav-settings" class="nav-btn">Settings</button>
       </nav>
     </header>
+
+    <!-- LIVE ODDS TICKER -->
+    <div class="ticker-wrap" id="ticker-wrap">
+        <div class="ticker" id="odds-ticker">
+            <div class="ticker-item">Awaiting Market Scan...</div>
+        </div>
+    </div>
 
     <!-- Main Dashboard View -->
     <main class="dashboard" id="view-dashboard">
@@ -61,6 +70,32 @@
     </main>
 
     </main>
+
+    <!-- Bankroll View -->
+    <main class="dashboard" id="view-bankroll" style="display: none;">
+      <div class="metrics-panel">
+        <div class="metric-card">
+           <p class="metric-label">Available Cash</p>
+           <h2 class="metric-value text-glow-green" id="bankroll-available">£0.00</h2>
+        </div>
+        <div class="metric-card">
+           <p class="metric-label">Locked in Bets</p>
+           <h2 class="metric-value text-glow-blue" id="bankroll-locked">£0.00</h2>
+        </div>
+        <div class="metric-card">
+           <p class="metric-label">Total Global Bankroll</p>
+           <h2 class="metric-value" id="bankroll-global" style="color: var(--text-primary)">£0.00</h2>
+        </div>
+      </div>
+
+      <div class="settings-card" style="max-width: 100%; width: 100%;">
+        <h3>Bookmaker Funds</h3>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Update your balances here. The dashboard uses these to suggest maximum stakes.</p>
+        <div class="bookie-balances-grid" id="bookie-balances-grid">
+           <!-- Populated by JS -->
+        </div>
+      </div>
+    </main>
     
     <!-- Portfolio View -->
     <main class="dashboard" id="view-portfolio" style="display: none;">
@@ -76,6 +111,17 @@
         <div class="metric-card">
           <p class="metric-label">Active Bets</p>
           <h2 class="metric-value" id="port-active-bets">0</h2>
+        </div>
+      </div>
+
+      <div class="settings-card" style="max-width: 100%; width: 100%; margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+           <h3>Profit Trajectory</h3>
+           <button id="auto-settle-btn" class="primary-btn" style="padding: 6px 12px; font-size: 0.75rem;">↻ Auto-Settle Past 3 Days</button>
+        </div>
+        <p id="auto-settle-status" style="color: var(--accent-blue); font-size: 0.75rem; margin-bottom: 1rem; display: none;">Fetching scores...</p>
+        <div style="height: 250px; width: 100%;">
+           <canvas id="profitChart"></canvas>
         </div>
       </div>
 
@@ -156,6 +202,18 @@
               <span id="token-usage-info">Using 0 tokens/month</span>
               <span id="token-days-info">500 tokens will last 31 days</span>
             </div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 2.5rem; border-top: 1px solid var(--border-color); padding-top: 2rem;">
+          <label>System Rules & Limitations</label>
+          <p style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 1rem;">Type a bookmaker name and click Add to completely block it from scans.</p>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+             <input type="text" id="blacklist-input" placeholder="e.g. betfair" style="flex-grow: 1; font-family: var(--font-mono); padding-left: 1rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: white; border-radius: 8px;">
+             <button id="add-blacklist-btn" class="primary-btn" style="padding: 10px 15px;">Add</button>
+          </div>
+          <div id="blacklist-tags" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+             <!-- Populated by JS -->
           </div>
         </div>
       </div>

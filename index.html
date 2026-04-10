@@ -12,11 +12,16 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+  <div id="flash-error-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,0,0,0.9); z-index: 9999; color: white; padding: 2rem; font-family: var(--font-mono); overflow: auto;">
+    <h2 style="color: white; margin-bottom: 1rem;">⚡ FLASH ENGINE CRASH DETECTED</h2>
+    <p id="error-message-text" style="font-size: 1.2rem;"></p>
+    <button onclick="location.reload()" style="margin-top: 1rem; padding: 10px 20px; background: white; color: red; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">FORCE RESTART</button>
+  </div>
   <div class="app-container">
     <header class="navbar">
       <div class="logo">
-        <span class="logo-icon">▲</span>
-        <h1>House of <span class="highlight">Bebington</span> <span style="font-size: 0.5rem; color: var(--accent-green);">v2.1</span></h1>
+        <span class="logo-icon" style="color: var(--accent-blue); text-shadow: 0 0 10px var(--accent-blue);">⚡</span>
+        <h1>House of <span class="highlight">Bebington</span> <span style="font-size: 0.6rem; color: #ffaa44; font-weight: bold; text-transform: uppercase;">v2.2 Flash</span></h1>
       </div>
       <nav class="nav-links">
         <button id="nav-dashboard" class="nav-btn active">Dashboard</button>

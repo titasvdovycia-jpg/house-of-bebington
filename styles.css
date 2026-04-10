@@ -752,3 +752,21 @@ body {
     from { text-shadow: 0 0 5px var(--accent-blue); }
     to { text-shadow: 0 0 20px var(--accent-blue), 0 0 30px var(--accent-blue); }
 }
+
+/* Smart Rebalancer Visuals */
+#rebalance-suggestions > div {
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+#rebalance-suggestions > div:hover {
+    transform: translateX(5px);
+    background: rgba(255,255,255,0.06) !important;
+}
+
+#master-reset-btn {
+    transition: filter 0.2s ease;
+}
+
+#master-reset-btn:hover {
+    filter: brightness(1.2);
+}

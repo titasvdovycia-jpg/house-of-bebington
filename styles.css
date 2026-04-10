@@ -508,3 +508,89 @@ body {
     font-size: 0.75rem;
     color: var(--text-secondary);
 }
+
+/* History Table */
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    font-size: 0.875rem;
+}
+
+.history-table th {
+    text-align: left;
+    padding: 1rem;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600;
+}
+
+.history-table td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.status-pending { background: rgba(0, 184, 255, 0.1); color: var(--accent-blue); }
+.status-won { background: rgba(0, 255, 136, 0.1); color: var(--accent-green); }
+.status-lost { background: rgba(255, 68, 68, 0.1); color: #ff4444; }
+
+.log-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+}
+
+.log-btn:hover {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+
+.settle-btn {
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.settle-won { background: var(--accent-green); color: black; margin-right: 4px; }
+.settle-lost { background: #ff4444; color: white; }
+
+/* Strategy Toggle */
+.strategy-picker {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem 1.5rem;
+    background: rgba(255,255,255,0.02);
+    border-top: 1px solid var(--border-color);
+}
+
+.strat-btn {
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+
+.strat-btn.active {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+    background: rgba(0, 184, 255, 0.05);
+}

@@ -1,3 +1,5 @@
+console.log("🚀 House of Bebington Engine v2.1 LOADED - Includes Ticker & Bankroll");
+
 // Arbitrage Math Utility (Using European Decimal Odds)
 function calculateArbitrage(legs) {
     let totalProb = 0;
@@ -1212,8 +1214,4 @@ async function sendTelegramSettlement(bet, result, winningLegIndex) {
 }
 
 // Inject AutoSettle to safeAutoScan to let it run passively efficiently
-const originalSafeAutoScan = safeAutoScan;
-safeAutoScan = function() {
-    originalSafeAutoScan();
-    autoResolveBets();
-}
+const originalSafeAutoScan = safeAuto

@@ -29,6 +29,16 @@
   padding: 0;
 }
 
+/* Remove numeric input spinners */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--bg-base);
@@ -45,7 +55,7 @@ body {
 
 .app-container {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1400px;
   padding: 0 2rem;
   display: flex;
   flex-direction: column;

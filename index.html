@@ -21,12 +21,13 @@
     <header class="navbar">
       <div class="logo">
         <span class="logo-icon" style="color: var(--accent-blue); text-shadow: 0 0 10px var(--accent-blue);">⚡</span>
-        <h1>House of <span class="highlight">Bebington</span> <span style="font-size: 0.6rem; color: #ffaa44; font-weight: bold; text-transform: uppercase;">v2.2 Flash</span></h1>
+        <h1>House of <span class="highlight">Bebington</span> <span style="font-size: 0.6rem; color: #ffaa44; font-weight: bold; text-transform: uppercase;">v2.7 Flash</span></h1>
       </div>
       <nav class="nav-links">
         <button id="nav-dashboard" class="nav-btn active">Dashboard</button>
         <button id="nav-portfolio" class="nav-btn">Portfolio</button>
         <button id="nav-bankroll" class="nav-btn">Bankroll</button>
+        <button id="nav-opportunities" class="nav-btn">Opportunities</button>
         <button id="nav-settings" class="nav-btn">Settings</button>
       </nav>
     </header>
@@ -68,6 +69,8 @@
         </div>
       </div>
 
+      <div id="action-center"></div>
+
       <div class="arb-feed" id="arb-feed">
         <!-- JS will populate cards here -->
         <p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">Click "Scan Live Markets" to fetch odds from UK Bookmakers.</p>
@@ -106,6 +109,23 @@
             <!-- Suggetions injected here -->
             <p style="font-size: 0.8rem; color: #666;">Scan markets or update balances to see rebalancing advice.</p>
         </div>
+      </div>
+    </main>
+
+    <!-- Opportunities View -->
+    <main class="dashboard" id="view-opportunities" style="display: none;">
+      <div class="metrics-panel">
+        <div class="metric-card">
+           <p class="metric-label">Archived Arbs</p>
+           <h2 class="metric-value text-glow-blue" id="opp-count">0</h2>
+        </div>
+        <div class="metric-card">
+           <p class="metric-label">Avg. Margin</p>
+           <h2 class="metric-value" id="opp-avg-margin">0.00%</h2>
+        </div>
+      </div>
+      <div class="arb-feed" id="opp-feed">
+        <p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">No archived opportunities yet. Found arbs are saved here until the event starts.</p>
       </div>
     </main>
     
@@ -167,11 +187,20 @@
         <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.875rem;">Configure your data provider details here. Your API key is stored locally in your browser and never sent anywhere else.</p>
         
         <div class="form-group">
-          <label for="api-key-input">The Odds API Key</label>
+          <label for="api-key-input">The Odds API Keys (Comma separated)</label>
           <div class="input-wrapper" style="margin-top: 0;">
-            <input type="password" id="api-key-input" placeholder="Enter your 32-character API key" style="width: 100%; font-family: var(--font-mono); padding-left: 1rem;" />
+            <input type="text" id="api-key-input" placeholder="key1, key2, key3" style="width: 100%; font-family: var(--font-mono); padding-left: 1rem;" />
           </div>
-          <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.5rem;">Targeting `regions=uk` and `markets=h2h`.</p>
+          <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.5rem;">Rotation will occur if one key hits a rate limit.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="odds-format-select">Odds Visualization</label>
+          <select id="odds-format-select" style="width: 100%; background: var(--bg-base); border: 1px solid var(--border-highlight); color: white; padding: 0.75rem; border-radius: 8px; font-family: var(--font-sans);">
+            <option value="decimal">Coefficient (Decimal)</option>
+            <option value="fractional">UK (Fractional)</option>
+            <option value="european">European (Decimal)</option>
+          </select>
         </div>
 
         <div class="form-group">
@@ -212,7 +241,7 @@
             </div>
             <div class="token-stats">
               <span id="token-usage-info">Using 0 tokens/month</span>
-              <span id="token-days-info">500 tokens will last 31 days</span>
+              <span id="actual-usage-info">Total usage: 0 | 31-day: 0</span>
             </div>
           </div>
         </div>
@@ -238,6 +267,6 @@
     </main>
   </div>
 
-  <script src="app.js?v=2.3"></script>
+  <script src="app.js?v=2.7"></script>
 </body>
 </html>

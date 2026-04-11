@@ -243,41 +243,62 @@ async function fetchLiveArbs() {
             game.bookmakers = game.bookmakers.filter(b => !systemBlacklist.some(black => b.title.toLowerCase().includes(black.toLowerCase())));
             
             // Handle multiple market types
-            const marketKeys = ['h2h', 'totals'];
+            const marketKeys = ['h2h', 'totals', 'spreads'];
             marketKeys.forEach(mKey => {
-                const outcomeNames = [...new Set(game.bookmakers.flatMap(b => b.markets.find(m => m.key === mKey)?.outcomes.map(o => o.name) || []))];
-                if (outcomeNames.length < 2) return;
-                
-                const globalBest = {};
-                game.bookmakers.forEach(b => {
-                    const market = b.markets.find(m => m.key === mKey); if (!market) return;
-                    market.outcomes.forEach(o => { 
-                        if(!globalBest[o.name] || o.price > globalBest[o.name].price) globalBest[o.name] = { price: o.price, bookie: b.title }; 
+                if (mKey === 'h2h') {
+                    const globalBest = {};
+                    game.bookmakers.forEach(b => {
+                        const market = b.markets.find(m => m.key === mKey); if (!market) return;
+                        market.outcomes.forEach(o => { 
+                            if(!globalBest[o.name] || o.price > globalBest[o.name].price) globalBest[o.name] = { price: o.price, bookie: b.title }; 
+                        });
                     });
-                });
-                
-                const bestLegs = Object.keys(globalBest).map(name => ({ outcome: name, odds: globalBest[name].price, bookmaker: globalBest[name].bookie }));
-                const calc = calculateArbitrage(bestLegs);
-                
-                if (calc.margin > 0.05) {
-                    game.bookmakers.forEach(bk => { 
-                        const cb = cleanBookie(bk.title); 
-                        if (bookieBalances[cb] === undefined) { 
-                            bookieBalances[cb] = 0; 
-                            if (!BOOKIE_REGIONS[cb]) BOOKIE_REGIONS[cb] = 'EU'; 
-                        } 
+                    const bestLegs = Object.keys(globalBest).map(name => ({ outcome: name, odds: globalBest[name].price, bookmaker: globalBest[name].bookie }));
+                    const calc = calculateArbitrage(bestLegs);
+                    if (calc.margin > 0.05) processArbMatch(game, mKey, null, bestLegs, calc);
+                } else {
+                    const allPoints = [...new Set(game.bookmakers.flatMap(b => b.markets.find(m => m.key === mKey)?.outcomes.map(o => o.point) || []))];
+                    allPoints.forEach(pt => {
+                        if (pt === undefined) return;
+                        const globalBest = {};
+                        game.bookmakers.forEach(b => {
+                            const market = b.markets.find(m => m.key === mKey); if (!market) return;
+                            market.outcomes.forEach(o => { 
+                                if (o.point === pt) {
+                                    if(!globalBest[o.name] || o.price > globalBest[o.name].price) globalBest[o.name] = { price: o.price, bookie: b.title }; 
+                                }
+                            });
+                        });
+                        const bestLegs = Object.keys(globalBest).map(name => ({ 
+                            outcome: `${name} ${pt > 0 ? '+' : ''}${pt}`, 
+                            odds: globalBest[name].price, 
+                            bookmaker: globalBest[name].bookie 
+                        }));
+                        if (bestLegs.length < 2) return;
+                        const calc = calculateArbitrage(bestLegs);
+                        if (calc.margin > 0.05) processArbMatch(game, mKey, pt, bestLegs, calc);
                     });
-                    matches.push({ 
-                        id: `${game.id}_${mKey}`, 
-                        sport: game.sport_title, 
-                        market: mKey === 'h2h' ? 'Match Winner' : 'Over/Under',
-                        matchup: `${game.home_team} vs ${game.away_team}`, 
-                        time: game.commence_time, // Keep raw time for archiving
-                        displayTime: new Date(game.commence_time).toLocaleString(),
-                        legs: bestLegs, 
-                        margin: calc.margin, 
-                        totalProb: calc.totalProb, 
-                        isArb: calc.isArb, 
+                }
+            });
+        });
+
+        function processArbMatch(game, mKey, point, bestLegs, calc) {
+            game.bookmakers.forEach(bk => { 
+                const cb = cleanBookie(bk.title); 
+                if (bookieBalances[cb] === undefined) { bookieBalances[cb] = 0; if (!BOOKIE_REGIONS[cb]) BOOKIE_REGIONS[cb] = 'EU'; } 
+            });
+            const marketLabel = mKey === 'h2h' ? 'Match Winner' : (mKey === 'totals' ? `Over/Under (${point})` : `Spread (${point})`);
+            matches.push({ 
+                id: `${game.id}_${mKey}_${point || '0'}`, 
+                sport: game.sport_title, 
+                market: marketLabel,
+                matchup: `${game.home_team} vs ${game.away_team}`, 
+                time: game.commence_time, 
+                displayTime: new Date(game.commence_time).toLocaleString(),
+                legs: bestLegs, 
+                margin: calc.margin, 
+                totalProb: calc.totalProb, 
+                isArb: calc.isArb, 
                         fullMarket: Object.keys(BOOKIE_SEARCH_URLS).map(bn => { 
                             const bd = game.bookmakers.find(bk => bk.title.toLowerCase().includes(bn.toLowerCase())); 
                             return { name: bn, odds: bd ? bd.markets.find(m => m.key === mKey)?.outcomes.map(o => `${o.name}: ${o.price}`).join('|') : '-', status: bd ? 'active' : 'missing' }; 

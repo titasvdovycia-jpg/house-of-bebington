@@ -8,7 +8,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 };
 
-console.log("⚡ [FLASH ENGINE] v2.9.10 Stable: Online & Initializing...");
+console.log("⚡ [FLASH ENGINE] v2.9.12 Stable: Online & Initializing...");
 
 const FIXED_STAKE = 10; // Fixed baseline for all calculations
 
@@ -638,14 +638,14 @@ function updateTokenHealth() {
 }
 
 // Global Nav
-['dashboard', 'portfolio', 'bankroll', 'opportunities', 'settings'].forEach(p => {
+['dashboard', 'bankroll', 'opportunities', 'settings'].forEach(p => {
     DOM[`nav${p.charAt(0).toUpperCase()+p.slice(1)}`].addEventListener('click', () => {
-        ['dashboard', 'portfolio', 'bankroll', 'opportunities', 'settings'].forEach(p2 => { 
+        ['dashboard', 'bankroll', 'opportunities', 'settings'].forEach(p2 => { 
             DOM[`nav${p2.charAt(0).toUpperCase()+p2.slice(1)}`].classList.toggle('active', p===p2); 
-            DOM[`view${p2.charAt(0).toUpperCase()+p2.slice(1)}`].style.display = p===p2 ? (p==='settings'?'flex':'block') : 'none'; 
+            const viewEl = DOM[`view${p2.charAt(0).toUpperCase()+p2.slice(1)}`];
+            if (viewEl) viewEl.style.display = p===p2 ? (p2==='settings'?'flex':'block') : 'none'; 
         });
-        if(p==='portfolio') updatePortfolio(); 
-        if(p==='bankroll') updateBankrollUI();
+        if(p==='bankroll') { updateBankrollUI(); updatePortfolio(); }
         if(p==='opportunities') updateOpportunitiesUI();
     });
 });
@@ -671,6 +671,7 @@ DOM.masterResetBtn.addEventListener('click', () => { if(confirm("Reset engine?")
 
 // Init
 renderSportsGrid(); updateUsageStats(); updateBankrollUI(); updateDashboard();
+if (DOM.activeArbsCount) DOM.activeArbsCount.innerText = '0';
 fetchUpcomingSpotlight();
 if (DOM.oddsFormatSelect) DOM.oddsFormatSelect.value = localStorage.getItem('odds_format') || 'decimal';
 if (DOM.apiKeyInput) DOM.apiKeyInput.value = apiKeys.join(', ');

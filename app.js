@@ -70,7 +70,24 @@ function calculateKelly(match) {
 }
 
 const formatCurrency = (val) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(val);
-const formatOdds = (val) => val.toFixed(2);
+
+function formatOdds(val) {
+    const format = localStorage.getItem('odds_format') || 'decimal';
+    if (format === 'fractional') {
+        const d = val - 1;
+        const tolerance = 1.0E-6;
+        let h = 1, k = 0, h2 = 0, k2 = 1, b = d;
+        do {
+            let a = Math.floor(b);
+            let aux = h; h = a * h + h2; h2 = aux;
+            aux = k; k = a * k + k2; k2 = aux;
+            b = 1 / (b - a);
+        } while (Math.abs(d - h / k) > d * tolerance);
+        if (k === 1) return `${h}/1`;
+        return `${h}/${k}`;
+    }
+    return val.toFixed(2);
+}
 
 let systemBlacklist = JSON.parse(localStorage.getItem('arb_blacklist')) || ['betfair'];
 
@@ -89,13 +106,26 @@ const BOOKIE_SEARCH_URLS = {
 };
 
 let bookieBalances = JSON.parse(localStorage.getItem('arb_bookie_balances')) || {};
-let apiKey = localStorage.getItem('arb_api_key') || '6cbd5867fac1c7ea342a271600898dd9'; 
-let tgToken = localStorage.getItem('tg_bot_token') || '8393406772:AAEEvxoyvv5weSH3-gDEC3fk6ldskXP6AT0';
-let tgChatId = localStorage.getItem('tg_chat_id') || '5761611308'; 
+let apiKeys = (localStorage.getItem('arb_api_key') || '6cbd5867fac1c7ea342a271600898dd9').split(',').map(s => s.trim());
+let currentApiKeyIndex = 0;
+let tokenUsageLog = JSON.parse(localStorage.getItem('arb_token_usage_log')) || [];
+let arbArchive = JSON.parse(localStorage.getItem('arb_archive')) || [];
 
-let betHistory = JSON.parse(localStorage.getItem('arb_bet_history')) || [];
 let loadedMatches = [];
 let autoScanInterval = null;
+
+function recordTokenUsage() {
+    tokenUsageLog.push(Date.now());
+    localStorage.setItem('arb_token_usage_log', JSON.stringify(tokenUsageLog));
+    updateUsageStats();
+}
+
+function updateUsageStats() {
+    const now = Date.now();
+    const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+    const thirtyDayUsage = tokenUsageLog.filter(t => t > thirtyDaysAgo).length;
+    if (DOM.actualUsageInfo) DOM.actualUsageInfo.innerText = `Total: ${tokenUsageLog.length} | 31-day: ${thirtyDayUsage}`;
+}
 
 const BOOKIE_REGIONS = {
     '888sport': 'UK', 'william hill': 'UK', 'paddy power': 'UK', 'sky bet': 'UK', 'ladbrokes': 'UK', 'coral': 'UK', 'unibet': 'UK', 'betfred': 'UK', 'bet victor': 'UK', 'smarkets': 'UK', 'matchbook': 'UK', 'boylesports': 'UK', 'betway': 'UK', 'grosvenor': 'UK', 'livescore': 'UK', 'virgin': 'UK', '10bet': 'UK', 'spreadex': 'UK', 'kwiff': 'UK', 'coolbet': 'EU', 'betclic': 'EU', 'leovegas': 'EU', 'mr green': 'EU', 'casumo': 'EU'
@@ -112,7 +142,7 @@ const SPORT_CONFIG = [
 ];
 
 const DOM = {
-    actionCenter: document.getElementById('action-center'), arbFeed: document.getElementById('arb-feed'), globalBankroll: document.getElementById('global-bankroll'), bankrollAvailable: document.getElementById('bankroll-available'), bankrollLocked: document.getElementById('bankroll-locked'), bankrollGlobal: document.getElementById('bankroll-global'), bookieBalancesGrid: document.getElementById('bookie-balances-grid'), blacklistInput: document.getElementById('blacklist-input'), addBlacklistBtn: document.getElementById('add-blacklist-btn'), blacklistTags: document.getElementById('blacklist-tags'), autoSettleBtn: document.getElementById('auto-settle-btn'), autoSettleStatus: document.getElementById('auto-settle-status'), profitChart: document.getElementById('profitChart'), activeArbsCount: document.getElementById('active-arbs-count'), bestMargin: document.getElementById('best-margin'), refreshBtn: document.getElementById('refresh-btn'), statusText: document.getElementById('status-text'), autoScanToggle: document.getElementById('auto-scan-toggle'), navDashboard: document.getElementById('nav-dashboard'), navPortfolio: document.getElementById('nav-portfolio'), navBankroll: document.getElementById('nav-bankroll'), navSettings: document.getElementById('nav-settings'), viewDashboard: document.getElementById('view-dashboard'), viewPortfolio: document.getElementById('view-portfolio'), viewBankroll: document.getElementById('view-bankroll'), viewSettings: document.getElementById('view-settings'), portTotalProfit: document.getElementById('port-total-profit'), portRoi: document.getElementById('port-roi'), portActiveBets: document.getElementById('port-active-bets'), betHistoryTable: document.getElementById('bet-history-table'), apiKeyInput: document.getElementById('api-key-input'), tgTokenInput: document.getElementById('tg-token'), tgChatIdInput: document.getElementById('tg-chat-id'), findIdBtn: document.getElementById('find-id-btn'), findIdStatus: document.getElementById('find-id-status'), saveSettingsBtn: document.getElementById('save-settings-btn'), sportsGrid: document.getElementById('sports-selection-grid'), healthStatusText: document.getElementById('health-status-text'), healthProgress: document.getElementById('health-progress'), tokenUsageInfo: document.getElementById('token-usage-info'), tokenDaysInfo: document.getElementById('token-days-info'), masterResetBtn: document.getElementById('master-reset-btn'), rebalanceSuggestions: document.getElementById('rebalance-suggestions')
+    actionCenter: document.getElementById('action-center'), arbFeed: document.getElementById('arb-feed'), globalBankroll: document.getElementById('global-bankroll'), bankrollAvailable: document.getElementById('bankroll-available'), bankrollLocked: document.getElementById('bankroll-locked'), bankrollGlobal: document.getElementById('bankroll-global'), bookieBalancesGrid: document.getElementById('bookie-balances-grid'), blacklistInput: document.getElementById('blacklist-input'), addBlacklistBtn: document.getElementById('add-blacklist-btn'), blacklistTags: document.getElementById('blacklist-tags'), autoSettleBtn: document.getElementById('auto-settle-btn'), autoSettleStatus: document.getElementById('auto-settle-status'), profitChart: document.getElementById('profitChart'), activeArbsCount: document.getElementById('active-arbs-count'), bestMargin: document.getElementById('best-margin'), refreshBtn: document.getElementById('refresh-btn'), statusText: document.getElementById('status-text'), autoScanToggle: document.getElementById('auto-scan-toggle'), navDashboard: document.getElementById('nav-dashboard'), navPortfolio: document.getElementById('nav-portfolio'), navBankroll: document.getElementById('nav-bankroll'), navOpportunities: document.getElementById('nav-opportunities'), navSettings: document.getElementById('nav-settings'), viewDashboard: document.getElementById('view-dashboard'), viewPortfolio: document.getElementById('view-portfolio'), viewBankroll: document.getElementById('view-bankroll'), viewOpportunities: document.getElementById('view-opportunities'), viewSettings: document.getElementById('view-settings'), portTotalProfit: document.getElementById('port-total-profit'), portRoi: document.getElementById('port-roi'), portActiveBets: document.getElementById('port-active-bets'), betHistoryTable: document.getElementById('bet-history-table'), apiKeyInput: document.getElementById('api-key-input'), oddsFormatSelect: document.getElementById('odds-format-select'), tgTokenInput: document.getElementById('tg-token'), tgChatIdInput: document.getElementById('tg-chat-id'), findIdBtn: document.getElementById('find-id-btn'), findIdStatus: document.getElementById('find-id-status'), saveSettingsBtn: document.getElementById('save-settings-btn'), sportsGrid: document.getElementById('sports-selection-grid'), healthStatusText: document.getElementById('health-status-text'), healthProgress: document.getElementById('health-progress'), tokenUsageInfo: document.getElementById('token-usage-info'), actualUsageInfo: document.getElementById('actual-usage-info'), masterResetBtn: document.getElementById('master-reset-btn'), rebalanceSuggestions: document.getElementById('rebalance-suggestions')
 };
 
 async function findChatId() {
@@ -153,36 +183,124 @@ function cleanBookie(name) {
 }
 
 async function fetchLiveArbs() {
-    if (!apiKey) { alert("Please set API Key!"); return; }
+    if (apiKeys.length === 0 || !apiKeys[0]) { alert("Please set API Key!"); return; }
     DOM.refreshBtn.innerText = "Scanning..."; DOM.statusText.innerHTML = 'Scanning...';
+    
     try {
         const selectedSports = Array.from(document.querySelectorAll('.sport-checkbox:checked')).map(cb => cb.value);
         if (selectedSports.length === 0) throw new Error("No sports selected!");
-        const results = await Promise.all(selectedSports.map(s => fetch(`https://api.the-odds-api.com/v4/sports/${s}/odds/?apiKey=${apiKey}&regions=uk,eu&markets=h2h&oddsFormat=decimal`).then(r => r.json())));
+        
+        let success = false;
+        let results = [];
+        
+        for (let i = 0; i < apiKeys.length; i++) {
+            const currentKey = apiKeys[currentApiKeyIndex];
+            try {
+                const queries = selectedSports.map(s => {
+                    // Fetch both h2h and totals for covered sports
+                    const markets = (s.includes('soccer') || s.includes('basketball')) ? 'h2h,totals' : 'h2h';
+                    return fetch(`https://api.the-odds-api.com/v4/sports/${s}/odds/?apiKey=${currentKey}&regions=uk,eu&markets=${markets}&oddsFormat=decimal`).then(async r => {
+                        if (r.status === 401 || r.status === 429) throw { status: r.status };
+                        recordTokenUsage();
+                        return r.json();
+                    });
+                });
+                results = await Promise.all(queries);
+                success = true;
+                break;
+            } catch (err) {
+                if (err.status === 401 || err.status === 429) {
+                    currentApiKeyIndex = (currentApiKeyIndex + 1) % apiKeys.length;
+                    console.warn(`API Key ${currentKey} failed. Retrying with next key...`);
+                } else {
+                    throw err;
+                }
+            }
+        }
+
+        if (!success) throw new Error("All API keys failed or reached limits.");
+
         const dedupedMap = new Map();
         results.flat().forEach(game => {
             if (!dedupedMap.has(game.id)) dedupedMap.set(game.id, game);
-            else game.bookmakers.forEach(b => { if(!dedupedMap.get(game.id).bookmakers.some(eb => eb.title === b.title)) dedupedMap.get(game.id).bookmakers.push(b); });
+            else {
+                game.bookmakers.forEach(b => {
+                    const existingBookie = dedupedMap.get(game.id).bookmakers.find(eb => eb.title === b.title);
+                    if (!existingBookie) dedupedMap.get(game.id).bookmakers.push(b);
+                    else {
+                        // Merge markets if they are different
+                        b.markets.forEach(m => {
+                            if (!existingBookie.markets.some(em => em.key === m.key)) existingBookie.markets.push(m);
+                        });
+                    }
+                });
+            }
         });
+
         const matches = [];
         dedupedMap.forEach(game => {
             game.bookmakers = game.bookmakers.filter(b => !systemBlacklist.some(black => b.title.toLowerCase().includes(black.toLowerCase())));
-            const outcomeNames = [...new Set(game.bookmakers.flatMap(b => b.markets.find(m => m.key === 'h2h')?.outcomes.map(o => o.name) || []))];
-            if (outcomeNames.length < 2) return;
-            const globalBest = {};
-            game.bookmakers.forEach(b => {
-                const h2h = b.markets.find(m => m.key === 'h2h'); if (!h2h) return;
-                h2h.outcomes.forEach(o => { if(!globalBest[o.name] || o.price > globalBest[o.name].price) globalBest[o.name] = { price: o.price, bookie: b.title }; });
+            
+            // Handle multiple market types
+            const marketKeys = ['h2h', 'totals'];
+            marketKeys.forEach(mKey => {
+                const outcomeNames = [...new Set(game.bookmakers.flatMap(b => b.markets.find(m => m.key === mKey)?.outcomes.map(o => o.name) || []))];
+                if (outcomeNames.length < 2) return;
+                
+                const globalBest = {};
+                game.bookmakers.forEach(b => {
+                    const market = b.markets.find(m => m.key === mKey); if (!market) return;
+                    market.outcomes.forEach(o => { 
+                        if(!globalBest[o.name] || o.price > globalBest[o.name].price) globalBest[o.name] = { price: o.price, bookie: b.title }; 
+                    });
+                });
+                
+                const bestLegs = Object.keys(globalBest).map(name => ({ outcome: name, odds: globalBest[name].price, bookmaker: globalBest[name].bookie }));
+                const calc = calculateArbitrage(bestLegs);
+                
+                if (calc.margin > 0.05) {
+                    game.bookmakers.forEach(bk => { 
+                        const cb = cleanBookie(bk.title); 
+                        if (bookieBalances[cb] === undefined) { 
+                            bookieBalances[cb] = 0; 
+                            if (!BOOKIE_REGIONS[cb]) BOOKIE_REGIONS[cb] = 'EU'; 
+                        } 
+                    });
+                    matches.push({ 
+                        id: `${game.id}_${mKey}`, 
+                        sport: game.sport_title, 
+                        market: mKey === 'h2h' ? 'Match Winner' : 'Over/Under',
+                        matchup: `${game.home_team} vs ${game.away_team}`, 
+                        time: game.commence_time, // Keep raw time for archiving
+                        displayTime: new Date(game.commence_time).toLocaleString(),
+                        legs: bestLegs, 
+                        margin: calc.margin, 
+                        totalProb: calc.totalProb, 
+                        isArb: calc.isArb, 
+                        fullMarket: Object.keys(BOOKIE_SEARCH_URLS).map(bn => { 
+                            const bd = game.bookmakers.find(bk => bk.title.toLowerCase().includes(bn.toLowerCase())); 
+                            return { name: bn, odds: bd ? bd.markets.find(m => m.key === mKey)?.outcomes.map(o => `${o.name}: ${o.price}`).join('|') : '-', status: bd ? 'active' : 'missing' }; 
+                        }) 
+                    });
+                }
             });
-            const bestLegs = Object.keys(globalBest).map(name => ({ outcome: name, odds: globalBest[name].price, bookmaker: globalBest[name].bookie }));
-            const calc = calculateArbitrage(bestLegs);
-            if (calc.margin > 0.05) {
-                game.bookmakers.forEach(bk => { const cb = cleanBookie(bk.title); if (bookieBalances[cb] === undefined) { bookieBalances[cb] = 0; if (!BOOKIE_REGIONS[cb]) BOOKIE_REGIONS[cb] = 'EU'; } });
-                matches.push({ id: game.id, sport: game.sport_title, matchup: `${game.home_team} vs ${game.away_team}`, time: new Date(game.commence_time).toLocaleString(), legs: bestLegs, margin: calc.margin, totalProb: calc.totalProb, isArb: calc.isArb, fullMarket: Object.keys(BOOKIE_SEARCH_URLS).map(bn => { const bd = game.bookmakers.find(bk => bk.title.toLowerCase().includes(bn.toLowerCase())); return { name: bn, odds: bd ? bd.markets.find(m => m.key === 'h2h')?.outcomes.map(o => `${o.name}: ${o.price}`).join('|') : '-', status: bd ? 'active' : 'missing' }; }) });
+        });
+
+        loadedMatches = matches.sort((a,b) => (a.isArb ? -1 : 1) || b.margin - a.margin).slice(0, 50);
+        
+        // Add to archive
+        loadedMatches.forEach(m => {
+            if (!arbArchive.some(am => am.id === m.id)) {
+                arbArchive.push(m);
             }
         });
-        loadedMatches = matches.sort((a,b) => (a.isArb ? -1 : 1) || b.margin - a.margin).slice(0, 50);
-        updateDashboard(); if (loadedMatches.length > 0) sendTelegramReport(loadedMatches.slice(0, 3));
+        // Expire old ones
+        const now = new Date().toISOString();
+        arbArchive = arbArchive.filter(m => m.time > now);
+        localStorage.setItem('arb_archive', JSON.stringify(arbArchive));
+
+        updateDashboard(); 
+        if (loadedMatches.length > 0) sendTelegramReport(loadedMatches.slice(0, 3));
     } catch (e) { DOM.arbFeed.innerHTML = `<p>${e.message}</p>`; }
     finally { DOM.refreshBtn.innerText = "Scan Live Markets"; }
 }
@@ -195,9 +313,9 @@ function renderArbCard(match, index, strategy = 'arb') {
     const profit = guaranteedReturn - totalInvestment;
     let legsHtml = sr.stakedLegs.map(l => {
         const sUrl = BOOKIE_SEARCH_URLS[cleanBookie(l.bookmaker)] ? `${BOOKIE_SEARCH_URLS[cleanBookie(l.bookmaker)]}${encodeURIComponent(match.matchup.split(' vs ')[0])}` : `https://google.com/search?q=${encodeURIComponent(l.bookmaker + ' ' + match.matchup)}`;
-        return `<div class="arb-leg"><div class="leg-top"><div><div class="bookmaker-name">${l.bookmaker} <a href="${sUrl}" target="_blank" class="quick-jump-link">⚡</a></div><div class="leg-outcome">${l.outcome}</div></div><div class="leg-odds">${l.odds.toFixed(2)}</div></div><div class="leg-bet-amount" style="${useIdeal?'opacity:0.5':''}"><span>${useIdeal?'Ideal':'Stake'}</span><span>${formatCurrency(useIdeal?l.idealStake:l.actualStake)}</span></div><div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-top:4px;"><span>If Wins:</span><span style="color:var(--accent-green); font-weight:bold;">${formatCurrency((useIdeal?l.idealStake:l.actualStake)*l.odds)}</span></div></div>`;
+        return `<div class="arb-leg"><div class="leg-top"><div><div class="bookmaker-name">${l.bookmaker} <a href="${sUrl}" target="_blank" class="quick-jump-link">⚡</a></div><div class="leg-outcome">${l.outcome}</div></div><div class="leg-odds">${formatOdds(l.odds)}</div></div><div class="leg-bet-amount" style="${useIdeal?'opacity:0.5':''}"><span>${useIdeal?'Ideal':'Stake'}</span><span>${formatCurrency(useIdeal?l.idealStake:l.actualStake)}</span></div><div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-top:4px;"><span>If Wins:</span><span style="color:var(--accent-green); font-weight:bold;">${formatCurrency((useIdeal?l.idealStake:l.actualStake)*l.odds)}</span></div></div>`;
     }).join('');
-    return `<div class="arb-card" id="card-${match.id}" style="border-left: 2px solid ${match.isArb?'var(--accent-green)':'transparent'}"><div class="arb-header"><div class="arb-game-info"><h3>${match.matchup}</h3><div class="arb-meta">${match.sport} • ${match.time}</div></div><div class="arb-profit-badge">${match.margin.toFixed(2)}%</div></div><div class="strategy-picker"><button class="strat-btn ${strategy==='arb'?'active':''}" onclick="updateMatchStrategy('${match.id}', 'arb')">Equal Arb</button><button class="strat-btn ${strategy==='under'?'active':''}" onclick="updateMatchStrategy('${match.id}', 'under')">Under-Hedge</button></div>${useIdeal ? `<div style="background:rgba(255,68,68,0.1); color:#ff4444; padding:0.5rem; text-align:center; font-size:0.75rem;">⚠️ Deposit: ${sr.bottlenecks.map(b => `£${b.needed.toFixed(2)} -> ${b.name}`).join(', ')}</div>` : ''}<div class="arb-body" style="grid-template-columns: repeat(${match.legs.length}, 1fr);">${legsHtml}</div><div style="background:rgba(0,0,0,0.2); padding:1rem; border-top:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;"><div><span style="font-size:0.75rem;">Return</span><strong>${strategy==='under'?`${formatCurrency(Math.min(...sr.stakedLegs.map(l=>(useIdeal?l.idealStake:l.actualStake)*l.odds)))} - ${formatCurrency(Math.max(...sr.stakedLegs.map(l=>(useIdeal?l.idealStake:l.actualStake)*l.odds)))}`:formatCurrency(guaranteedReturn)}</strong></div><div style="display:flex; gap:1rem; align-items:center;"><span>${strategy==='under'?'Variable':formatCurrency(profit)}</span><button class="primary-btn" onclick="logBet('${match.id}', '${strategy}')">Log Bet</button></div></div><div style="padding:0.5rem 1rem;"><button onclick="toggleMarketDepth('${match.id}')" style="background:none; border:none; color:var(--accent-blue); cursor:pointer; font-size:0.75rem;">▶ Market Depth</button><div id="depth-container-${match.id}" style="display:none; margin-top:0.5rem; grid-template-columns:1fr 1fr; gap:0.5rem;">${match.fullMarket.map(f => `<div style="font-size:0.65rem; background:rgba(255,255,255,0.03); padding:4px;"><strong>${f.name}</strong>: ${f.odds}</div>`).join('')}</div></div></div>`;
+    return `<div class="arb-card" id="card-${match.id}" style="border-left: 2px solid ${match.isArb?'var(--accent-green)':'transparent'}"><div class="arb-header"><div class="arb-game-info"><h3>${match.matchup}</h3><div class="arb-meta">${match.sport} • ${match.market} • ${match.displayTime}</div></div><div class="arb-profit-badge">${match.margin.toFixed(2)}%</div></div><div class="strategy-picker"><button class="strat-btn ${strategy==='arb'?'active':''}" onclick="updateMatchStrategy('${match.id}', 'arb')">Equal Arb</button><button class="strat-btn ${strategy==='under'?'active':''}" onclick="updateMatchStrategy('${match.id}', 'under')">Under-Hedge</button></div>${useIdeal ? `<div style="background:rgba(255,68,68,0.1); color:#ff4444; padding:0.5rem; text-align:center; font-size:0.75rem;">⚠️ Deposit: ${sr.bottlenecks.map(b => `£${b.needed.toFixed(2)} -> ${b.name}`).join(', ')}</div>` : ''}<div class="arb-body" style="grid-template-columns: repeat(${match.legs.length}, 1fr);">${legsHtml}</div><div style="background:rgba(0,0,0,0.2); padding:1rem; border-top:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;"><div><span style="font-size:0.75rem;">Return</span><strong>${strategy==='under'?`${formatCurrency(Math.min(...sr.stakedLegs.map(l=>(useIdeal?l.idealStake:l.actualStake)*l.odds)))} - ${formatCurrency(Math.max(...sr.stakedLegs.map(l=>(useIdeal?l.idealStake:l.actualStake)*l.odds)))}`:formatCurrency(guaranteedReturn)}</strong></div><div style="display:flex; gap:1rem; align-items:center;"><span>${strategy==='under'?'Variable':formatCurrency(profit)}</span><button class="primary-btn" onclick="logBet('${match.id}', '${strategy}')">Log Bet</button></div></div><div style="padding:0.5rem 1rem;"><button onclick="toggleMarketDepth('${match.id}')" style="background:none; border:none; color:var(--accent-blue); cursor:pointer; font-size:0.75rem;">▶ Market Depth</button><div id="depth-container-${match.id}" style="display:none; margin-top:0.5rem; grid-template-columns:1fr 1fr; gap:0.5rem;">${match.fullMarket.map(f => `<div style="font-size:0.65rem; background:rgba(255,255,255,0.03); padding:4px;"><strong>${f.name}</strong>: ${f.odds}</div>`).join('')}</div></div></div>`;
 }
 
 window.toggleMarketDepth = (id) => { const c = document.getElementById(`depth-container-${id}`); c.style.display = c.style.display === 'none' ? 'grid' : 'none'; };
@@ -210,7 +328,21 @@ function updateDashboard() {
     if (DOM.activeArbsCount) DOM.activeArbsCount.innerText = arbs.length;
     if (DOM.bestMargin) DOM.bestMargin.innerText = arbs[0] ? arbs[0].margin.toFixed(2) + '%' : '0.00%';
     DOM.statusText.innerText = "Scan Complete";
-    updateActionCenter(); updateStockyTicker(); updateRebalancer();
+    updateActionCenter(); updateStockyTicker(); updateRebalancer(); updateUsageStats();
+}
+
+function updateOpportunitiesUI() {
+    if (!DOM.oppFeed) return;
+    const now = new Date().toISOString();
+    arbArchive = arbArchive.filter(m => m.time > now);
+    localStorage.setItem('arb_archive', JSON.stringify(arbArchive));
+    
+    DOM.oppFeed.innerHTML = arbArchive.length > 0 ? arbArchive.map((m, i) => renderArbCard(m, i)).join('') : '<p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">No archived opportunities yet.</p>';
+    if (DOM.oppCount) DOM.oppCount.innerText = arbArchive.length;
+    if (DOM.oppAvgMargin && arbArchive.length > 0) {
+        const avg = arbArchive.reduce((sum, m) => sum + m.margin, 0) / arbArchive.length;
+        DOM.oppAvgMargin.innerText = avg.toFixed(2) + '%';
+    }
 }
 
 function updateStockyTicker() {
@@ -314,9 +446,9 @@ function updateBankrollUI() {
                     <a href="${url}" target="_blank" style="text-decoration: none; font-size: 0.8rem;">🔗</a>
                 </div>
                 <h4 style="margin: 4px 0;">${b.toUpperCase()}</h4>
-                <div class="input-wrapper" style="margin-top: 4px;">
+                <div class="input-wrapper" style="margin-top: 4px; border: ${bookieBalances[b] > 0 ? '1px solid var(--accent-green)' : '1px solid var(--border-highlight)'}; border-radius: 8px;">
                     <span class="currency-symbol">£</span>
-                    <input type="number" value="${(bookieBalances[b]||0).toFixed(2)}" onchange="updateCustomBalance('${b}', this.value)" style="width: 100%; border: none; background: transparent; color: white;" />
+                    <input type="number" value="${(bookieBalances[b]||0).toFixed(2)}" onchange="updateCustomBalance('${b}', this.value)" style="width: 100%; border: none; background: transparent; color: white; padding-left: 2.5rem;" />
                 </div>
             </div>
         `;
@@ -385,19 +517,29 @@ function updateTokenHealth() {
 }
 
 // Global Nav
-['dashboard', 'portfolio', 'bankroll', 'settings'].forEach(p => {
+['dashboard', 'portfolio', 'bankroll', 'opportunities', 'settings'].forEach(p => {
     DOM[`nav${p.charAt(0).toUpperCase()+p.slice(1)}`].addEventListener('click', () => {
-        ['dashboard', 'portfolio', 'bankroll', 'settings'].forEach(p2 => { 
+        ['dashboard', 'portfolio', 'bankroll', 'opportunities', 'settings'].forEach(p2 => { 
             DOM[`nav${p2.charAt(0).toUpperCase()+p2.slice(1)}`].classList.toggle('active', p===p2); 
             DOM[`view${p2.charAt(0).toUpperCase()+p2.slice(1)}`].style.display = p===p2 ? (p==='settings'?'flex':'block') : 'none'; 
         });
-        if(p==='portfolio') updatePortfolio(); if(p==='bankroll') updateBankrollUI();
+        if(p==='portfolio') updatePortfolio(); 
+        if(p==='bankroll') updateBankrollUI();
+        if(p==='opportunities') updateOpportunitiesUI();
     });
 });
 
 DOM.refreshBtn.addEventListener('click', fetchLiveArbs);
-DOM.saveSettingsBtn.addEventListener('click', () => { apiKey = DOM.apiKeyInput.value; localStorage.setItem('arb_api_key', apiKey); alert("Saved!"); });
+DOM.saveSettingsBtn.addEventListener('click', () => { 
+    const keysInput = DOM.apiKeyInput.value; 
+    apiKeys = keysInput.split(',').map(s => s.trim());
+    localStorage.setItem('arb_api_key', keysInput); 
+    localStorage.setItem('odds_format', DOM.oddsFormatSelect.value);
+    alert("Saved!"); 
+});
 DOM.masterResetBtn.addEventListener('click', () => { if(confirm("Reset engine?")) { localStorage.clear(); location.reload(); } });
 
 // Init
-renderSportsGrid(); updateTokenHealth(); updateBankrollUI(); updateDashboard();
+renderSportsGrid(); updateUsageStats(); updateBankrollUI(); updateDashboard();
+if (DOM.oddsFormatSelect) DOM.oddsFormatSelect.value = localStorage.getItem('odds_format') || 'decimal';
+if (DOM.apiKeyInput) DOM.apiKeyInput.value = apiKeys.join(', ');

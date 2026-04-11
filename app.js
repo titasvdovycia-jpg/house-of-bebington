@@ -1,4 +1,4 @@
-// FLASH ENGINE v2.9.7 Stable - GLOBAL RESILIENCE WRAPPER
+// FLASH ENGINE v2.9.8 Stable - GLOBAL RESILIENCE WRAPPER
 window.onerror = function(msg, url, line, col, error) {
     const overlay = document.getElementById('flash-error-overlay');
     const statusText = document.getElementById('error-message-text');
@@ -8,7 +8,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 };
 
-console.log("⚡ [FLASH ENGINE] v2.9.7 Stable: Online & Initializing...");
+console.log("⚡ [FLASH ENGINE] v2.9.8 Stable: Online & Initializing...");
 
 const FIXED_STAKE = 10; // Fixed baseline for all calculations
 
@@ -115,6 +115,7 @@ let betHistory = JSON.parse(localStorage.getItem('arb_bet_history')) || [];
 let matches = [];
 let loadedMatches = [];
 let autoScanInterval = null;
+let ukOnlyFilter = false;
 
 function recordTokenUsage() {
     tokenUsageLog.push(Date.now());
@@ -144,7 +145,8 @@ const SPORT_CONFIG = [
 ];
 
 const DOM = {
-    actionCenter: document.getElementById('action-center'), arbFeed: document.getElementById('arb-feed'), globalBankroll: document.getElementById('global-bankroll'), bankrollAvailable: document.getElementById('bankroll-available'), bankrollLocked: document.getElementById('bankroll-locked'), bankrollGlobal: document.getElementById('bankroll-global'), bookieBalancesGrid: document.getElementById('bookie-balances-grid'), blacklistInput: document.getElementById('blacklist-input'), addBlacklistBtn: document.getElementById('add-blacklist-btn'), blacklistTags: document.getElementById('blacklist-tags'), autoSettleBtn: document.getElementById('auto-settle-btn'), autoSettleStatus: document.getElementById('auto-settle-status'), profitChart: document.getElementById('profitChart'), activeArbsCount: document.getElementById('active-arbs-count'), bestMargin: document.getElementById('best-margin'), refreshBtn: document.getElementById('refresh-btn'), statusText: document.getElementById('status-text'), autoScanToggle: document.getElementById('auto-scan-toggle'), navDashboard: document.getElementById('nav-dashboard'), navPortfolio: document.getElementById('nav-portfolio'), navBankroll: document.getElementById('nav-bankroll'), navOpportunities: document.getElementById('nav-opportunities'), navSettings: document.getElementById('nav-settings'), viewDashboard: document.getElementById('view-dashboard'), viewPortfolio: document.getElementById('view-portfolio'), viewBankroll: document.getElementById('view-bankroll'), viewOpportunities: document.getElementById('view-opportunities'), viewSettings: document.getElementById('view-settings'), portTotalProfit: document.getElementById('port-total-profit'), portRoi: document.getElementById('port-roi'), portActiveBets: document.getElementById('port-active-bets'), betHistoryTable: document.getElementById('bet-history-table'), apiKeyInput: document.getElementById('api-key-input'), oddsFormatSelect: document.getElementById('odds-format-select'), tgTokenInput: document.getElementById('tg-token'), tgChatIdInput: document.getElementById('tg-chat-id'), findIdBtn: document.getElementById('find-id-btn'), findIdStatus: document.getElementById('find-id-status'), saveSettingsBtn: document.getElementById('save-settings-btn'), sportsGrid: document.getElementById('sports-selection-grid'), healthStatusText: document.getElementById('health-status-text'), healthProgress: document.getElementById('health-progress'), tokenUsageInfo: document.getElementById('token-usage-info'), actualUsageInfo: document.getElementById('actual-usage-info'), masterResetBtn: document.getElementById('master-reset-btn'), rebalanceSuggestions: document.getElementById('rebalance-suggestions')
+    actionCenter: document.getElementById('action-center'), arbFeed: document.getElementById('arb-feed'), globalBankroll: document.getElementById('global-bankroll'), bankrollAvailable: document.getElementById('bankroll-available'), bankrollLocked: document.getElementById('bankroll-locked'), bankrollGlobal: document.getElementById('bankroll-global'), bookieBalancesGrid: document.getElementById('bookie-balances-grid'), blacklistInput: document.getElementById('blacklist-input'), addBlacklistBtn: document.getElementById('add-blacklist-btn'), blacklistTags: document.getElementById('blacklist-tags'), autoSettleBtn: document.getElementById('auto-settle-btn'), autoSettleStatus: document.getElementById('auto-settle-status'), profitChart: document.getElementById('profitChart'), activeArbsCount: document.getElementById('active-arbs-count'), bestMargin: document.getElementById('best-margin'), refreshBtn: document.getElementById('refresh-btn'), statusText: document.getElementById('status-text'), autoScanToggle: document.getElementById('auto-scan-toggle'), navDashboard: document.getElementById('nav-dashboard'), navPortfolio: document.getElementById('nav-portfolio'), navBankroll: document.getElementById('nav-bankroll'), navOpportunities: document.getElementById('nav-opportunities'), navSettings: document.getElementById('nav-settings'), viewDashboard: document.getElementById('view-dashboard'), viewPortfolio: document.getElementById('view-portfolio'), viewBankroll: document.getElementById('view-bankroll'), viewOpportunities: document.getElementById('view-opportunities'), viewSettings: document.getElementById('view-settings'), portTotalProfit: document.getElementById('port-total-profit'), portRoi: document.getElementById('port-roi'), portActiveBets: document.getElementById('port-active-bets'), betHistoryTable: document.getElementById('bet-history-table'), apiKeyInput: document.getElementById('api-key-input'), oddsFormatSelect: document.getElementById('odds-format-select'), tgTokenInput: document.getElementById('tg-token'), tgChatIdInput: document.getElementById('tg-chat-id'), findIdBtn: document.getElementById('find-id-btn'), findIdStatus: document.getElementById('find-id-status'), saveSettingsBtn: document.getElementById('save-settings-btn'), sportsGrid: document.getElementById('sports-selection-grid'), healthStatusText: document.getElementById('health-status-text'), healthProgress: document.getElementById('health-progress'), tokenUsageInfo: document.getElementById('token-usage-info'), actualUsageInfo: document.getElementById('actual-usage-info'), masterResetBtn: document.getElementById('master-reset-btn'), rebalanceSuggestions: document.getElementById('rebalance-suggestions'),
+    fixtureTicker: document.getElementById('fixture-ticker'), ukFilterBtn: document.getElementById('uk-filter-btn')
 };
 
 async function findChatId() {
@@ -328,6 +330,8 @@ function processArbMatch(game, mKey, point, bestLegs, calc) {
 
 function renderArbCard(match, index, strategy = 'arb') {
     const sr = calculateStakes(match.totalProb, match.legs, strategy);
+    if (!sr || !sr.stakedLegs || sr.stakedLegs.length === 0) return `<div class="arb-card" style="padding:1rem;">⚠️ Calculation error: No legs found.</div>`;
+    
     const useIdeal = sr.isZeroBalance;
     const guaranteedReturn = (useIdeal ? sr.stakedLegs[0].idealStake : sr.stakedLegs[0].actualStake) * sr.stakedLegs[0].odds;
     const totalInvestment = useIdeal ? sr.idealInvestment : sr.stakedLegs.reduce((sum, l) => sum + l.actualStake, 0);
@@ -344,8 +348,14 @@ window.updateMatchStrategy = (id, strat) => { const idx = loadedMatches.findInde
 
 function updateDashboard() {
     if (!DOM.arbFeed) return;
-    const arbs = loadedMatches.filter(m => m.isArb);
-    DOM.arbFeed.innerHTML = loadedMatches.length > 0 ? loadedMatches.slice(0, 15).map((m, i) => renderArbCard(m, i)).join('') : '<p>No matches yet.</p>';
+    
+    let displayMatches = [...loadedMatches];
+    if (ukOnlyFilter) {
+        displayMatches = displayMatches.filter(m => m.legs.every(l => BOOKIE_REGIONS[cleanBookie(l.bookmaker)] === 'UK'));
+    }
+
+    const arbs = displayMatches.filter(m => m.isArb);
+    DOM.arbFeed.innerHTML = displayMatches.length > 0 ? displayMatches.slice(0, 15).map((m, i) => renderArbCard(m, i)).join('') : '<p>No matches yet (Try Scan Live Markets).</p>';
     if (DOM.bestMargin) DOM.bestMargin.innerText = arbs[0] ? arbs[0].margin.toFixed(2) + '%' : '0.00%';
     DOM.statusText.innerText = "Scan Complete";
     updateStockyTicker(); updateRebalancer(); updateUsageStats();
@@ -409,6 +419,11 @@ async function fetchUpcomingSpotlight() {
                 });
             }
         });
+
+        // Ticker population
+        if (DOM.fixtureTicker) {
+            DOM.fixtureTicker.innerHTML = allMatches.map(m => `<div class="ticker-item"><span class="ticker-team">${m.matchup}</span> <span class="ticker-divider">|</span> ${m.league} <span class="ticker-odds">${m.time}</span></div>`).join('');
+        }
 
         el.innerHTML = allMatches.length > 0 ? allMatches.map(m => `
             <div class="spotlight-item">
@@ -611,6 +626,15 @@ function updateTokenHealth() {
 });
 
 DOM.refreshBtn.addEventListener('click', fetchLiveArbs);
+if (DOM.ukFilterBtn) {
+    DOM.ukFilterBtn.addEventListener('click', () => {
+        ukOnlyFilter = !ukOnlyFilter;
+        DOM.ukFilterBtn.innerText = `Region: ${ukOnlyFilter ? 'UK ONLY' : 'ALL'}`;
+        DOM.ukFilterBtn.classList.toggle('active', ukOnlyFilter);
+        updateDashboard();
+        updateOpportunitiesUI();
+    });
+}
 DOM.saveSettingsBtn.addEventListener('click', () => { 
     const keysInput = DOM.apiKeyInput.value; 
     apiKeys = keysInput.split(',').map(s => s.trim());

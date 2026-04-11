@@ -29,14 +29,13 @@
   padding: 0;
 }
 
-/* Remove numeric input spinners */
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+  -webkit-appearance: none !important;
+  margin: 0 !important;
 }
 input[type=number] {
-  -moz-appearance: textfield;
+  -moz-appearance: textfield !important;
 }
 
 body {
@@ -642,21 +641,21 @@ body {
     background: var(--accent-green);
 }
 
-/* Bankroll Manager */
+/* Bankroll Manager - Compact Cards */
 .bookie-balances-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.75rem;
 }
 
 .bookie-balance-card {
     background: rgba(255,255,255,0.02);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 1rem;
+    padding: 0.75rem;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.4rem;
 }
 
 .bookie-balance-card h4 {

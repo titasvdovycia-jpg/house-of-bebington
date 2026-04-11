@@ -1,4 +1,4 @@
-// FLASH ENGINE v2.9.9 Stable - GLOBAL RESILIENCE WRAPPER
+// FLASH ENGINE v2.9.10 Stable - GLOBAL RESILIENCE WRAPPER
 window.onerror = function(msg, url, line, col, error) {
     const overlay = document.getElementById('flash-error-overlay');
     const statusText = document.getElementById('error-message-text');
@@ -8,7 +8,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 };
 
-console.log("⚡ [FLASH ENGINE] v2.9.9 Stable: Online & Initializing...");
+console.log("⚡ [FLASH ENGINE] v2.9.10 Stable: Online & Initializing...");
 
 const FIXED_STAKE = 10; // Fixed baseline for all calculations
 
@@ -259,7 +259,7 @@ async function fetchLiveArbs() {
                     
                     const calc = calculateArbitrage(bestLegs);
                     if (calc.margin > 0.05) processArbMatch(game, mKey, null, bestLegs, calc);
-                } else {
+                } else if (mKey === 'totals') {
                     const allPoints = [...new Set(game.bookmakers.flatMap(b => b.markets.find(m => m.key === mKey)?.outcomes.map(o => o.point) || []))];
                     allPoints.forEach(pt => {
                         if (pt === undefined) return;
@@ -272,14 +272,32 @@ async function fetchLiveArbs() {
                                 }
                             });
                         });
-                        const bestLegs = Object.keys(globalBest).map(name => ({ 
-                            outcome: `${name} ${pt > 0 ? '+' : ''}${pt}`, 
-                            odds: globalBest[name].price, 
-                            bookmaker: globalBest[name].bookie 
-                        }));
+                        const bestLegs = Object.keys(globalBest).map(name => ({ outcome: `${name} ${pt}`, odds: globalBest[name].price, bookmaker: globalBest[name].bookie }));
                         if (bestLegs.length < 2) return;
                         const calc = calculateArbitrage(bestLegs);
                         if (calc.margin > 0.05) processArbMatch(game, mKey, pt, bestLegs, calc);
+                    });
+                } else if (mKey === 'spreads') {
+                    const absPoints = [...new Set(game.bookmakers.flatMap(b => b.markets.find(m => m.key === mKey)?.outcomes.map(o => Math.abs(o.point)) || []))];
+                    absPoints.forEach(absPt => {
+                        const globalBest = {};
+                        game.bookmakers.forEach(b => {
+                            const market = b.markets.find(m => m.key === mKey); if (!market) return;
+                            market.outcomes.forEach(o => {
+                                if (Math.abs(o.point) === absPt) {
+                                    // Key by outcome name + its specific point sign to ensure opposite coverage
+                                    const key = `${o.name}_${o.point}`;
+                                    if (!globalBest[key] || o.price > globalBest[key].price) globalBest[key] = { name: o.name, odds: o.price, bookie: b.title, pt: o.point };
+                                }
+                            });
+                        });
+                        const legs = Object.values(globalBest);
+                        // Ensure we have exactly 2 legs and they have opposite signs (or both zero for Draw)
+                        if (legs.length === 2 && (legs[0].pt + legs[1].pt === 0)) {
+                            const bestLegs = legs.map(l => ({ outcome: `${l.name} ${l.pt > 0 ? '+' : ''}${l.pt}`, odds: l.odds, bookmaker: l.bookie }));
+                            const calc = calculateArbitrage(bestLegs);
+                            if (calc.margin > 0.05) processArbMatch(game, mKey, absPt, bestLegs, calc);
+                        }
                     });
                 }
             });

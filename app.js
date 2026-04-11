@@ -115,7 +115,7 @@ let betHistory = JSON.parse(localStorage.getItem('arb_bet_history')) || [];
 let matches = [];
 let loadedMatches = [];
 let autoScanInterval = null;
-let ukOnlyFilter = false;
+let ukOnlyFilter = true;
 
 function recordTokenUsage() {
     tokenUsageLog.push(Date.now());
@@ -131,8 +131,9 @@ function updateUsageStats() {
 }
 
 const BOOKIE_REGIONS = {
-    '888sport': 'UK', 'william hill': 'UK', 'paddy power': 'UK', 'sky bet': 'UK', 'ladbrokes': 'UK', 'coral': 'UK', 'unibet': 'UK', 'betfred': 'UK', 'bet victor': 'UK', 'smarkets': 'UK', 'matchbook': 'UK', 'boylesports': 'UK', 'betway': 'UK', 'grosvenor': 'UK', 'livescore': 'UK', 'virgin': 'UK', '10bet': 'UK', 'spreadex': 'UK', 'kwiff': 'UK', 'coolbet': 'EU', 'betclic': 'EU', 'leovegas': 'EU', 'mr green': 'EU', 'casumo': 'EU'
+    '888sport': 'UK', 'william hill': 'UK', 'paddy power': 'UK', 'sky bet': 'UK', 'ladbrokes': 'UK', 'coral': 'UK', 'unibet': 'UK', 'betfred': 'UK', 'bet victor': 'UK', 'smarkets': 'UK', 'matchbook': 'UK', 'boylesports': 'UK', 'betway': 'UK', 'grosvenor': 'UK', 'livescore': 'UK', 'virgin': 'UK', '10bet': 'UK', 'spreadex': 'UK', 'kwiff': 'UK'
 };
+const BOOKIE_POPULARITY = ['sky bet', 'william hill', 'paddy power', 'betfair', 'matchbook', 'smarkets', 'unibet', 'betfred', 'ladbrokes', 'coral', '888sport'];
 
 function getGlobalBankroll() {
     let available = Object.values(bookieBalances).reduce((sum, val) => sum + val, 0);
@@ -350,8 +351,9 @@ function renderArbCard(match, index, strategy = 'arb') {
     const totalInvestment = useIdeal ? sr.idealInvestment : sr.stakedLegs.reduce((sum, l) => sum + l.actualStake, 0);
     const profit = guaranteedReturn - totalInvestment;
     let legsHtml = sr.stakedLegs.map(l => {
+        const cleanBkName = l.bookmaker.split('(')[0].trim();
         const sUrl = BOOKIE_SEARCH_URLS[cleanBookie(l.bookmaker)] ? `${BOOKIE_SEARCH_URLS[cleanBookie(l.bookmaker)]}${encodeURIComponent(match.matchup.split(' vs ')[0])}` : `https://google.com/search?q=${encodeURIComponent(l.bookmaker + ' ' + match.matchup)}`;
-        return `<div class="arb-leg"><div class="leg-top"><div><div class="bookmaker-name">${l.bookmaker} <a href="${sUrl}" target="_blank" class="quick-jump-link">⚡</a></div><div class="leg-outcome">${l.outcome}</div></div><div class="leg-odds">${formatOdds(l.odds)}</div></div><div class="leg-bet-amount" style="${useIdeal?'opacity:0.5':''}"><span>${useIdeal?'Ideal':'Stake'}</span><span>${formatCurrency(useIdeal?l.idealStake:l.actualStake)}</span></div><div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-top:4px;"><span>If Wins:</span><span style="color:var(--accent-green); font-weight:bold;">${formatCurrency((useIdeal?l.idealStake:l.actualStake)*l.odds)}</span></div></div>`;
+        return `<div class="arb-leg"><div class="leg-top"><div><div class="bookmaker-name">${cleanBkName} <a href="${sUrl}" target="_blank" class="quick-jump-link">⚡</a></div><div class="leg-outcome">${l.outcome}</div></div><div class="leg-odds">${formatOdds(l.odds)}</div></div><div class="leg-bet-amount" style="${useIdeal?'opacity:0.5':''}"><span>${useIdeal?'Ideal':'Stake'}</span><span>${formatCurrency(useIdeal?l.idealStake:l.actualStake)}</span></div><div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-top:4px;"><span>If Wins:</span><span style="color:var(--accent-green); font-weight:bold;">${formatCurrency((useIdeal?l.idealStake:l.actualStake)*l.odds)}</span></div></div>`;
     }).join('');
     return `<div class="arb-card" id="card-${match.id}" style="border-left: 2px solid ${match.isArb?'var(--accent-green)':'transparent'}"><div class="arb-header"><div class="arb-game-info"><h3>${match.matchup}</h3><div class="arb-meta">${match.sport} • ${match.market} • ${match.displayTime}</div></div><div class="arb-profit-badge">${match.margin.toFixed(2)}%</div></div><div class="strategy-picker"><button class="strat-btn ${strategy==='arb'?'active':''}" onclick="updateMatchStrategy('${match.id}', 'arb')">Equal Arb</button><button class="strat-btn ${strategy==='under'?'active':''}" onclick="updateMatchStrategy('${match.id}', 'under')">Under-Hedge</button></div>${useIdeal ? `<div style="background:rgba(255,68,68,0.1); color:#ff4444; padding:0.5rem; text-align:center; font-size:0.75rem;">⚠️ Deposit: ${sr.bottlenecks.map(b => `£${b.needed.toFixed(2)} -> ${b.name}`).join(', ')}</div>` : ''}<div class="arb-body" style="grid-template-columns: repeat(${match.legs.length}, 1fr);">${legsHtml}</div><div style="background:rgba(0,0,0,0.2); padding:1rem; border-top:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;"><div><span style="font-size:0.75rem;">Return</span><strong>${strategy==='under'?`${formatCurrency(Math.min(...sr.stakedLegs.map(l=>(useIdeal?l.idealStake:l.actualStake)*l.odds)))} - ${formatCurrency(Math.max(...sr.stakedLegs.map(l=>(useIdeal?l.idealStake:l.actualStake)*l.odds)))}`:formatCurrency(guaranteedReturn)}</strong></div><div style="display:flex; gap:1rem; align-items:center;"><span>${strategy==='under'?'Variable':formatCurrency(profit)}</span><button class="primary-btn" onclick="logBet('${match.id}', '${strategy}')">Log Bet</button></div></div><div style="padding:0.5rem 1rem;"><button onclick="toggleMarketDepth('${match.id}')" style="background:none; border:none; color:var(--accent-blue); cursor:pointer; font-size:0.75rem;">▶ Market Depth</button><div id="depth-container-${match.id}" style="display:none; margin-top:0.5rem; grid-template-columns:1fr 1fr; gap:0.5rem;">${match.fullMarket.map(f => `<div style="font-size:0.65rem; background:rgba(255,255,255,0.03); padding:4px;"><strong>${f.name}</strong>: ${f.odds}</div>`).join('')}</div></div></div>`;
 }
@@ -368,6 +370,7 @@ function updateDashboard() {
     }
 
     const arbs = displayMatches.filter(m => m.isArb);
+    if (DOM.activeArbsCount) DOM.activeArbsCount.innerText = arbs.length;
     DOM.arbFeed.innerHTML = displayMatches.length > 0 ? displayMatches.slice(0, 15).map((m, i) => renderArbCard(m, i)).join('') : '<p>No matches yet (Try Scan Live Markets).</p>';
     if (DOM.bestMargin) DOM.bestMargin.innerText = arbs[0] ? arbs[0].margin.toFixed(2) + '%' : '0.00%';
     DOM.statusText.innerText = "Scan Complete";
@@ -435,7 +438,7 @@ async function fetchUpcomingSpotlight() {
 
         // Ticker population
         if (DOM.fixtureTicker) {
-            DOM.fixtureTicker.innerHTML = allMatches.map(m => `<div class="ticker-item"><span class="ticker-team">${m.matchup}</span> <span class="ticker-divider">|</span> ${m.league} <span class="ticker-odds">${m.time}</span></div>`).join('');
+            DOM.fixtureTicker.innerHTML = allMatches.length > 0 ? allMatches.map(m => `<div class="ticker-item"><span class="ticker-team">${m.matchup}</span> <span class="ticker-divider">|</span> ${m.league} <span class="ticker-odds">${m.time}</span></div>`).join('') : '<div class="ticker-item">No upcoming fixtures...</div>';
         }
 
         el.innerHTML = allMatches.length > 0 ? allMatches.map(m => `
@@ -544,7 +547,16 @@ function updateBankrollUI() {
     if (DOM.bankrollLocked) DOM.bankrollLocked.innerText = formatCurrency(br.locked); 
     if (DOM.bankrollGlobal) DOM.bankrollGlobal.innerText = formatCurrency(br.total);
     
-    const sorted = Object.keys(BOOKIE_SEARCH_URLS).sort((a,b) => (BOOKIE_REGIONS[a]==='UK'?-1:1) || a.localeCompare(b));
+    const sorted = Object.keys(BOOKIE_SEARCH_URLS).sort((a,b) => {
+        const balA = bookieBalances[a] || 0; const balB = bookieBalances[b] || 0;
+        if (balA > 0 && balB <= 0) return -1; if (balA <= 0 && balB > 0) return 1;
+        if (balA > 0 && balB > 0) return a.localeCompare(b);
+        // Both zero: sort by popularity
+        const popA = BOOKIE_POPULARITY.indexOf(a); const popB = BOOKIE_POPULARITY.indexOf(b);
+        if (popA !== -1 && popB === -1) return -1; if (popA === -1 && popB !== -1) return 1;
+        if (popA !== -1 && popB !== -1) return popA - popB;
+        return a.localeCompare(b);
+    });
     DOM.bookieBalancesGrid.innerHTML = sorted.map(b => {
         const region = BOOKIE_REGIONS[b] || 'EU';
         const url = BOOKIE_SEARCH_URLS[b]?.split('search')[0];

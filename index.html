@@ -21,7 +21,7 @@
     <header class="navbar">
       <div class="logo">
         <span class="logo-icon" style="color: var(--accent-blue); text-shadow: 0 0 10px var(--accent-blue);">⚡</span>
-        <h1>House of <span class="highlight">Bebington</span> <span style="font-size: 0.6rem; color: #ffaa44; font-weight: bold; text-transform: uppercase;">v2.9.7 Stable</span></h1>
+        <h1>House of <span class="highlight">Bebington</span> <span style="font-size: 0.6rem; color: #ffaa44; font-weight: bold; text-transform: uppercase;">v2.9.8 Stable</span></h1>
       </div>
       <nav class="nav-links">
         <button id="nav-dashboard" class="nav-btn active">Dashboard</button>
@@ -32,7 +32,12 @@
       </nav>
     </header>
 
-    <!-- LIVE ODDS TICKER -->
+    <!-- DUAL TICKERS -->
+    <div class="fixture-ticker-wrap" id="fixture-ticker-wrap">
+        <div class="ticker" id="fixture-ticker">
+            <div class="ticker-item">Loading Daily Spotlights...</div>
+        </div>
+    </div>
     <div class="ticker-wrap" id="ticker-wrap">
         <div class="ticker" id="odds-ticker">
             <div class="ticker-item">Awaiting Market Scan...</div>
@@ -62,6 +67,7 @@
       <div class="controls-bar">
         <p class="status-indicator" id="status-text"><span class="dot pulse"></span> Ready to scan...</p>
         <div style="display: flex; gap: 1rem; align-items: center;">
+            <button id="uk-filter-btn" class="region-toggle-btn">Region: ALL</button>
             <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: var(--text-secondary); cursor: pointer;">
                 <input type="checkbox" id="auto-scan-toggle" /> Auto-Scan (Safe: 2hr)
             </label>
@@ -278,6 +284,6 @@
     </main>
   </div>
 
-  <script src="app.js?v=2.9.7"></script>
+  <script src="app.js?v=2.9.8"></script>
 </body>
 </html>

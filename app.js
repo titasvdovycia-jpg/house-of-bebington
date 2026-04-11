@@ -8,7 +8,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 };
 
-console.log("⚡ [FLASH ENGINE] v2.9.12 Stable: Online & Initializing...");
+console.log("⚡ [FLASH ENGINE] v2.9.15 Stable: Online & Initializing...");
 
 const FIXED_STAKE = 10; // Fixed baseline for all calculations
 
@@ -147,7 +147,7 @@ const SPORT_CONFIG = [
 
 const DOM = {
     actionCenter: document.getElementById('action-center'), arbFeed: document.getElementById('arb-feed'), globalBankroll: document.getElementById('global-bankroll'), bankrollAvailable: document.getElementById('bankroll-available'), bankrollLocked: document.getElementById('bankroll-locked'), bankrollGlobal: document.getElementById('bankroll-global'), bookieBalancesGrid: document.getElementById('bookie-balances-grid'), blacklistInput: document.getElementById('blacklist-input'), addBlacklistBtn: document.getElementById('add-blacklist-btn'), blacklistTags: document.getElementById('blacklist-tags'), autoSettleBtn: document.getElementById('auto-settle-btn'), autoSettleStatus: document.getElementById('auto-settle-status'), profitChart: document.getElementById('profitChart'), activeArbsCount: document.getElementById('active-arbs-count'), bestMargin: document.getElementById('best-margin'), refreshBtn: document.getElementById('refresh-btn'), statusText: document.getElementById('status-text'), autoScanToggle: document.getElementById('auto-scan-toggle'), navDashboard: document.getElementById('nav-dashboard'), navPortfolio: document.getElementById('nav-portfolio'), navBankroll: document.getElementById('nav-bankroll'), navOpportunities: document.getElementById('nav-opportunities'), navSettings: document.getElementById('nav-settings'), viewDashboard: document.getElementById('view-dashboard'), viewPortfolio: document.getElementById('view-portfolio'), viewBankroll: document.getElementById('view-bankroll'), viewOpportunities: document.getElementById('view-opportunities'), viewSettings: document.getElementById('view-settings'), portTotalProfit: document.getElementById('port-total-profit'), portRoi: document.getElementById('port-roi'), portActiveBets: document.getElementById('port-active-bets'), betHistoryTable: document.getElementById('bet-history-table'), apiKeyInput: document.getElementById('api-key-input'), oddsFormatSelect: document.getElementById('odds-format-select'), tgTokenInput: document.getElementById('tg-token'), tgChatIdInput: document.getElementById('tg-chat-id'), findIdBtn: document.getElementById('find-id-btn'), findIdStatus: document.getElementById('find-id-status'), saveSettingsBtn: document.getElementById('save-settings-btn'), sportsGrid: document.getElementById('sports-selection-grid'), healthStatusText: document.getElementById('health-status-text'), healthProgress: document.getElementById('health-progress'), tokenUsageInfo: document.getElementById('token-usage-info'), actualUsageInfo: document.getElementById('actual-usage-info'), masterResetBtn: document.getElementById('master-reset-btn'), rebalanceSuggestions: document.getElementById('rebalance-suggestions'),
-    fixtureTicker: document.getElementById('fixture-ticker'), ukFilterBtn: document.getElementById('uk-filter-btn')
+    ukFilterBtn: document.getElementById('uk-filter-btn')
 };
 
 async function findChatId() {
@@ -396,65 +396,36 @@ function updateOpportunitiesUI() {
     }
 }
 
-async function fetchUpcomingSpotlight() {
-    const el = document.getElementById('upcoming-spotlight-feed');
-    if (!el) return;
+function manualLogBet() {
+    const event = document.getElementById('man-event').value;
+    const choice = document.getElementById('man-selection').value;
+    const stake = parseFloat(document.getElementById('man-stake').value);
+    const returns = parseFloat(document.getElementById('man-return').value);
+
+    if (!event || stake <= 0 || returns <= 0) { alert("Please enter valid bet details!"); return; }
+
+    betHistory.unshift({ 
+        id: Date.now(), 
+        date: new Date().toLocaleDateString(), 
+        commence_time: new Date().toISOString(), 
+        matchup: event, 
+        sport: 'Manual Entry', 
+        market: choice,
+        legs: [{ bookmaker: 'Manual', outcome: choice, odds: (returns/stake), stake: stake }], 
+        totalStake: stake, 
+        possibleReturn: returns, 
+        status: 'pending' 
+    });
+
+    localStorage.setItem('arb_bet_history', JSON.stringify(betHistory));
+    updatePortfolio(); updateBankrollUI();
     
-    try {
-        const endpoints = [
-            { name: 'Premier League', url: 'https://api.openligadb.de/getmatchdata/epl', type: 'soccer' },
-            { name: 'Champions League', url: 'https://api.openligadb.de/getmatchdata/cl', type: 'soccer' },
-            { name: 'NBA', url: 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard', type: 'espn' },
-            { name: 'EuroLeague', url: 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-euroleague/scoreboard', type: 'espn' }
-        ];
-
-        let allMatches = [];
-
-        const results = await Promise.allSettled(endpoints.map(e => fetch(e.url).then(r => r.json()).then(data => ({ ...e, data }))));
-        
-        results.forEach(res => {
-            if (res.status !== 'fulfilled') return;
-            const { name, type, data } = res.value;
-            
-            if (type === 'soccer') {
-                data.slice(0, 5).forEach(m => {
-                    if (new Date(m.matchDateTime) < new Date()) return;
-                    allMatches.push({
-                        league: name,
-                        matchup: `${m.team1.teamName} vs ${m.team2.teamName}`,
-                        time: new Date(m.matchDateTime).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })
-                    });
-                });
-            } else if (type === 'espn') {
-                data.events?.slice(0, 5).forEach(e => {
-                    allMatches.push({
-                        league: name,
-                        matchup: e.name,
-                        time: new Date(e.date).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })
-                    });
-                });
-            }
-        });
-
-        // Ticker population
-        if (DOM.fixtureTicker) {
-            DOM.fixtureTicker.innerHTML = allMatches.length > 0 ? allMatches.map(m => `<div class="ticker-item"><span class="ticker-team">${m.matchup}</span> <span class="ticker-divider">|</span> ${m.league} <span class="ticker-odds">${m.time}</span></div>`).join('') : '<div class="ticker-item">No upcoming fixtures...</div>';
-        }
-
-        el.innerHTML = allMatches.length > 0 ? allMatches.map(m => `
-            <div class="spotlight-item">
-                <div class="spotlight-match">${m.matchup}</div>
-                <div class="spotlight-meta">
-                    <span class="spotlight-league">${m.league}</span>
-                    <span>${m.time}</span>
-                </div>
-                <button onclick="flashScan('${m.matchup}')" style="margin-top:8px; width:100%; font-size:0.6rem; padding:4px; background:rgba(0,184,255,0.1); border:1px solid var(--accent-blue-dim); color:var(--accent-blue); border-radius:4px; cursor:pointer;">⚡ Quick Scan (Market)</button>
-            </div>
-        `).join('') : '<p style="font-size:0.7rem; text-align:center;">No upcoming major matches found.</p>';
-
-    } catch (err) {
-        el.innerHTML = `<p style="font-size:0.7rem; color:#ff4444;">Failed to load spotlight.</p>`;
-    }
+    // Clear form
+    document.getElementById('man-event').value = '';
+    document.getElementById('man-selection').value = '';
+    document.getElementById('man-stake').value = '';
+    document.getElementById('man-return').value = '';
+    alert("✅ Manual Bet Added!");
 }
 
 window.flashScan = (matchup) => {
@@ -672,6 +643,5 @@ DOM.masterResetBtn.addEventListener('click', () => { if(confirm("Reset engine?")
 // Init
 renderSportsGrid(); updateUsageStats(); updateBankrollUI(); updateDashboard();
 if (DOM.activeArbsCount) DOM.activeArbsCount.innerText = '0';
-fetchUpcomingSpotlight();
 if (DOM.oddsFormatSelect) DOM.oddsFormatSelect.value = localStorage.getItem('odds_format') || 'decimal';
 if (DOM.apiKeyInput) DOM.apiKeyInput.value = apiKeys.join(', ');

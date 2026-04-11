@@ -110,6 +110,7 @@ let apiKeys = (localStorage.getItem('arb_api_key') || '6cbd5867fac1c7ea342a27160
 let currentApiKeyIndex = 0;
 let tokenUsageLog = JSON.parse(localStorage.getItem('arb_token_usage_log')) || [];
 let arbArchive = JSON.parse(localStorage.getItem('arb_archive')) || [];
+let betHistory = JSON.parse(localStorage.getItem('arb_bet_history')) || [];
 
 let loadedMatches = [];
 let autoScanInterval = null;

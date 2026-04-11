@@ -542,10 +542,11 @@ body {
 
 .history-table th {
     text-align: left;
-    padding: 1rem;
+    padding: 1rem 0.5rem;
     color: var(--text-secondary);
     border-bottom: 1px solid var(--border-color);
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .history-table td {
@@ -697,8 +698,6 @@ body {
     font-weight: bold;
 }
 
-/* Stock Market Ticker */
-.ticker-wrap {
     width: 100%;
     overflow: hidden;
     background-color: #111;
@@ -750,20 +749,6 @@ body {
     100% { transform: translate3d(-100%, 0, 0); }
 }
 
-.fixture-ticker-wrap {
-    width: 100%;
-    overflow: hidden;
-    background: linear-gradient(90deg, #001f3f, #001122);
-    border-bottom: 1px solid rgba(0, 184, 255, 0.2);
-    padding: 0.25rem 0;
-    font-size: 0.75rem;
-    height: 30px;
-}
-
-.fixture-ticker-wrap .ticker-item {
-    color: var(--accent-blue);
-    font-weight: 600;
-}
 
 .region-toggle-btn {
     font-size: 0.75rem;

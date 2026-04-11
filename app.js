@@ -112,6 +112,7 @@ let tokenUsageLog = JSON.parse(localStorage.getItem('arb_token_usage_log')) || [
 let arbArchive = JSON.parse(localStorage.getItem('arb_archive')) || [];
 let betHistory = JSON.parse(localStorage.getItem('arb_bet_history')) || [];
 
+let matches = [];
 let loadedMatches = [];
 let autoScanInterval = null;
 
@@ -238,7 +239,7 @@ async function fetchLiveArbs() {
             }
         });
 
-        const matches = [];
+        matches = [];
         dedupedMap.forEach(game => {
             game.bookmakers = game.bookmakers.filter(b => !systemBlacklist.some(black => b.title.toLowerCase().includes(black.toLowerCase())));
             
@@ -282,9 +283,6 @@ async function fetchLiveArbs() {
             });
         });
 
-                }
-            });
-        });
 
         loadedMatches = matches.sort((a,b) => b.margin - a.margin);
         

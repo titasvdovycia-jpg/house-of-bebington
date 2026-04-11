@@ -287,10 +287,7 @@ async function fetchLiveArbs() {
             });
         });
 
-        loadedMatches = matches.sort((a,b) => {
-            if (a.isArb !== b.isArb) return a.isArb ? -1 : 1;
-            return b.margin - a.margin;
-        }).slice(0, 50);
+        loadedMatches = matches.sort((a,b) => b.margin - a.margin);
         
         // Add to archive
         loadedMatches.forEach(m => {

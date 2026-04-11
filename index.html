@@ -21,7 +21,7 @@
     <header class="navbar">
       <div class="logo">
         <span class="logo-icon" style="color: var(--accent-blue); text-shadow: 0 0 10px var(--accent-blue);">⚡</span>
-        <h1>House of <span class="highlight">Bebington</span> <span style="font-size: 0.6rem; color: #ffaa44; font-weight: bold; text-transform: uppercase;">v2.9.12 Stable</span></h1>
+        <h1>House of <span class="highlight">Bebington</span> <span style="font-size: 0.6rem; color: #ffaa44; font-weight: bold; text-transform: uppercase;">v2.9.15 Stable</span></h1>
       </div>
       <nav class="nav-links">
         <button id="nav-dashboard" class="nav-btn active">Main Page</button>
@@ -31,12 +31,6 @@
       </nav>
     </header>
 
-    <!-- DUAL TICKERS -->
-    <div class="fixture-ticker-wrap" id="fixture-ticker-wrap">
-        <div class="ticker" id="fixture-ticker">
-            <div class="ticker-item">Loading Daily Spotlights...</div>
-        </div>
-    </div>
     <div class="ticker-wrap" id="ticker-wrap">
         <div class="ticker" id="odds-ticker">
             <div class="ticker-item">Awaiting Market Scan...</div>
@@ -63,7 +57,7 @@
         </div>
       </div>
 
-      <div class="settings-card" style="margin-bottom: 2rem; display: flex; gap: 2rem; align-items: flex-start;">
+      <div class="settings-card" style="margin-bottom: 2rem; display: flex; gap: 2rem; align-items: flex-start; max-width: 100%;">
         <div style="flex: 1;">
             <h3 style="font-size: 1rem; margin-bottom: 1rem;">Targeted Sports Coverage</h3>
             <div class="sports-grid" id="sports-selection-grid">
@@ -132,6 +126,32 @@
         <div id="rebalance-suggestions" style="display: flex; flex-direction: column; gap: 0.75rem;">
             <!-- Suggestions injected here -->
             <p style="font-size: 0.8rem; color: #666;">Scan markets or update balances to see rebalancing advice.</p>
+        </div>
+      </div>
+
+      <div class="settings-card" style="max-width: 100%; width: 100%; margin-top: 2rem;">
+        <h3>Manual Bet Entry</h3>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem;">If you lost bets or placed them manually, record them here to restore your history.</p>
+        <div class="manual-entry-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+            <div class="form-group">
+                <label>Event Name</label>
+                <input type="text" id="man-event" placeholder="e.g. Arsenal vs Chelsea" style="width: 100%;" />
+            </div>
+            <div class="form-group">
+                <label>Bet Selection</label>
+                <input type="text" id="man-selection" placeholder="e.g. Over 2.5" style="width: 100%;" />
+            </div>
+            <div class="form-group">
+                <label>Total Stake (£)</label>
+                <input type="number" id="man-stake" placeholder="10.00" style="width: 100%;" />
+            </div>
+            <div class="form-group">
+                <label>Potential Return (£)</label>
+                <input type="number" id="man-return" placeholder="12.50" style="width: 100%;" />
+            </div>
+            <div class="form-group" style="display: flex; align-items: flex-end;">
+                <button onclick="manualLogBet()" class="primary-btn" style="width: 100%; padding: 0.7rem;">+ Add to History</button>
+            </div>
         </div>
       </div>
 

@@ -27,7 +27,7 @@
         <button id="nav-dashboard" class="nav-btn active">Dashboard</button>
         <button id="nav-portfolio" class="nav-btn">Portfolio</button>
         <button id="nav-bankroll" class="nav-btn">Bankroll</button>
-        <button id="nav-opportunities" class="nav-btn">Opportunities</button>
+        <button id="nav-opportunities" class="nav-btn highlight">Opportunities</button>
         <button id="nav-settings" class="nav-btn">Settings</button>
       </nav>
     </header>
@@ -54,7 +54,7 @@
           <p class="metric-label">Global Bankroll</p>
           <div class="input-wrapper">
              <span class="currency-symbol">£</span>
-             <input type="number" id="global-bankroll" value="1000" />
+             <input type="number" id="global-bankroll" value="10" />
           </div>
         </div>
       </div>
@@ -69,11 +69,23 @@
         </div>
       </div>
 
-      <div id="action-center"></div>
-
-      <div class="arb-feed" id="arb-feed">
-        <!-- JS will populate cards here -->
-        <p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">Click "Scan Live Markets" to fetch odds from UK Bookmakers.</p>
+      <div class="dashboard-grid">
+        <div class="main-content">
+          <div id="action-center"></div>
+          <div class="arb-feed" id="arb-feed">
+            <!-- JS will populate cards here -->
+            <p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">Click "Scan Live Markets" to fetch odds from UK Bookmakers.</p>
+          </div>
+        </div>
+        <aside class="sidebar-spotlight">
+          <div class="sidebar-header">
+            <h3>⚡ Upcoming Spotlight</h3>
+            <p>No-Token Schedule</p>
+          </div>
+          <div id="upcoming-spotlight-feed" class="spotlight-feed">
+            <p style="font-size: 0.75rem; color: var(--text-secondary); padding: 1rem; text-align: center;">Loading schedules...</p>
+          </div>
+        </aside>
       </div>
     </main>
 

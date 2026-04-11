@@ -337,13 +337,78 @@ function updateOpportunitiesUI() {
     arbArchive = arbArchive.filter(m => m.time > now);
     localStorage.setItem('arb_archive', JSON.stringify(arbArchive));
     
-    DOM.oppFeed.innerHTML = arbArchive.length > 0 ? arbArchive.map((m, i) => renderArbCard(m, i)).join('') : '<p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">No archived opportunities yet.</p>';
+    DOM.oppFeed.innerHTML = arbArchive.length > 0 ? arbArchive.map((m, i) => {
+        const card = renderArbCard(m, i);
+        // Inject a prominent time badge
+        return card.replace('<div class="arb-meta">', `<div class="arb-meta"><span style="color:var(--accent-blue); font-weight:bold; border:1px solid var(--accent-blue-dim); padding:2px 6px; border-radius:4px; font-size:0.7rem;">STARTS: ${m.displayTime}</span>`);
+    }).join('') : '<p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">No archived opportunities yet.</p>';
     if (DOM.oppCount) DOM.oppCount.innerText = arbArchive.length;
     if (DOM.oppAvgMargin && arbArchive.length > 0) {
         const avg = arbArchive.reduce((sum, m) => sum + m.margin, 0) / arbArchive.length;
         DOM.oppAvgMargin.innerText = avg.toFixed(2) + '%';
     }
 }
+
+async function fetchUpcomingSpotlight() {
+    const el = document.getElementById('upcoming-spotlight-feed');
+    if (!el) return;
+    
+    try {
+        const endpoints = [
+            { name: 'Premier League', url: 'https://api.openligadb.de/getmatchdata/epl', type: 'soccer' },
+            { name: 'Champions League', url: 'https://api.openligadb.de/getmatchdata/cl', type: 'soccer' },
+            { name: 'NBA', url: 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard', type: 'espn' },
+            { name: 'EuroLeague', url: 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-euroleague/scoreboard', type: 'espn' }
+        ];
+
+        let allMatches = [];
+
+        const results = await Promise.allSettled(endpoints.map(e => fetch(e.url).then(r => r.json()).then(data => ({ ...e, data }))));
+        
+        results.forEach(res => {
+            if (res.status !== 'fulfilled') return;
+            const { name, type, data } = res.value;
+            
+            if (type === 'soccer') {
+                data.slice(0, 5).forEach(m => {
+                    if (new Date(m.matchDateTime) < new Date()) return;
+                    allMatches.push({
+                        league: name,
+                        matchup: `${m.team1.teamName} vs ${m.team2.teamName}`,
+                        time: new Date(m.matchDateTime).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+                    });
+                });
+            } else if (type === 'espn') {
+                data.events?.slice(0, 5).forEach(e => {
+                    allMatches.push({
+                        league: name,
+                        matchup: e.name,
+                        time: new Date(e.date).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+                    });
+                });
+            }
+        });
+
+        el.innerHTML = allMatches.length > 0 ? allMatches.map(m => `
+            <div class="spotlight-item">
+                <div class="spotlight-match">${m.matchup}</div>
+                <div class="spotlight-meta">
+                    <span class="spotlight-league">${m.league}</span>
+                    <span>${m.time}</span>
+                </div>
+                <button onclick="flashScan('${m.matchup}')" style="margin-top:8px; width:100%; font-size:0.6rem; padding:4px; background:rgba(0,184,255,0.1); border:1px solid var(--accent-blue-dim); color:var(--accent-blue); border-radius:4px; cursor:pointer;">⚡ Quick Scan (Market)</button>
+            </div>
+        `).join('') : '<p style="font-size:0.7rem; text-align:center;">No upcoming major matches found.</p>';
+
+    } catch (err) {
+        el.innerHTML = `<p style="font-size:0.7rem; color:#ff4444;">Failed to load spotlight.</p>`;
+    }
+}
+
+window.flashScan = (matchup) => {
+    alert(`Scanning markets for: ${matchup}\nThis uses 1 API Token.`);
+    fetchLiveArbs();
+};
 
 function updateStockyTicker() {
     const el = document.getElementById('odds-ticker'); if (!el || loadedMatches.length === 0) return;
@@ -541,5 +606,6 @@ DOM.masterResetBtn.addEventListener('click', () => { if(confirm("Reset engine?")
 
 // Init
 renderSportsGrid(); updateUsageStats(); updateBankrollUI(); updateDashboard();
+fetchUpcomingSpotlight();
 if (DOM.oddsFormatSelect) DOM.oddsFormatSelect.value = localStorage.getItem('odds_format') || 'decimal';
 if (DOM.apiKeyInput) DOM.apiKeyInput.value = apiKeys.join(', ');

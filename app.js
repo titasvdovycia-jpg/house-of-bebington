@@ -287,7 +287,10 @@ async function fetchLiveArbs() {
             });
         });
 
-        loadedMatches = matches.sort((a,b) => (a.isArb ? -1 : 1) || b.margin - a.margin).slice(0, 50);
+        loadedMatches = matches.sort((a,b) => {
+            if (a.isArb !== b.isArb) return a.isArb ? -1 : 1;
+            return b.margin - a.margin;
+        }).slice(0, 50);
         
         // Add to archive
         loadedMatches.forEach(m => {
@@ -326,16 +329,16 @@ function updateDashboard() {
     if (!DOM.arbFeed) return;
     const arbs = loadedMatches.filter(m => m.isArb);
     DOM.arbFeed.innerHTML = loadedMatches.length > 0 ? loadedMatches.slice(0, 15).map((m, i) => renderArbCard(m, i)).join('') : '<p>No matches yet.</p>';
-    if (DOM.activeArbsCount) DOM.activeArbsCount.innerText = arbs.length;
     if (DOM.bestMargin) DOM.bestMargin.innerText = arbs[0] ? arbs[0].margin.toFixed(2) + '%' : '0.00%';
     DOM.statusText.innerText = "Scan Complete";
-    updateActionCenter(); updateStockyTicker(); updateRebalancer(); updateUsageStats();
+    updateStockyTicker(); updateRebalancer(); updateUsageStats();
 }
 
 function updateOpportunitiesUI() {
     if (!DOM.oppFeed) return;
     const now = new Date().toISOString();
     arbArchive = arbArchive.filter(m => m.time > now);
+    arbArchive.sort((a, b) => b.margin - a.margin);
     localStorage.setItem('arb_archive', JSON.stringify(arbArchive));
     
     DOM.oppFeed.innerHTML = arbArchive.length > 0 ? arbArchive.map((m, i) => {
@@ -418,14 +421,8 @@ function updateStockyTicker() {
 }
 
 function updateActionCenter() {
-    if (!DOM.actionCenter) return;
-    const consolidator = {}; 
-    loadedMatches.filter(m => m.isArb).forEach(m => {
-        const sr = calculateStakes(m.totalProb, m.legs, 'arb');
-        if (sr.isZeroBalance) sr.bottlenecks.forEach(b => consolidator[b.name] = Math.max(consolidator[b.name] || 0, b.needed));
-    });
-    const entries = Object.entries(consolidator);
-    DOM.actionCenter.innerHTML = entries.length > 0 ? `<div class="action-center-banner"><h3>⚠️ MASTER DEPOSIT CHECKLIST</h3><div style="display:flex; gap:1rem; overflow-x:auto; padding:0.5rem 0;">${entries.map(([n, a]) => `<div style="background:rgba(255,255,255,0.05); padding:0.5rem; border-left:3px solid #ff4444;"><strong>${n}</strong>: £${a.toFixed(2)}</div>`).join('')}</div><button onclick="document.getElementById('nav-bankroll').click()" class="primary-btn">💰 Fund Accounts</button></div>` : '';
+    // Removed as per user request to declutter UI
+    if (DOM.actionCenter) DOM.actionCenter.innerHTML = '';
 }
 
 function updateRebalancer() {

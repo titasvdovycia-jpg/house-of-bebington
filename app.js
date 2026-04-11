@@ -282,28 +282,6 @@ async function fetchLiveArbs() {
             });
         });
 
-        function processArbMatch(game, mKey, point, bestLegs, calc) {
-            game.bookmakers.forEach(bk => { 
-                const cb = cleanBookie(bk.title); 
-                if (bookieBalances[cb] === undefined) { bookieBalances[cb] = 0; if (!BOOKIE_REGIONS[cb]) BOOKIE_REGIONS[cb] = 'EU'; } 
-            });
-            const marketLabel = mKey === 'h2h' ? 'Match Winner' : (mKey === 'totals' ? `Over/Under (${point})` : `Spread (${point})`);
-            matches.push({ 
-                id: `${game.id}_${mKey}_${point || '0'}`, 
-                sport: game.sport_title, 
-                market: marketLabel,
-                matchup: `${game.home_team} vs ${game.away_team}`, 
-                time: game.commence_time, 
-                displayTime: new Date(game.commence_time).toLocaleString(),
-                legs: bestLegs, 
-                margin: calc.margin, 
-                totalProb: calc.totalProb, 
-                isArb: calc.isArb, 
-                        fullMarket: Object.keys(BOOKIE_SEARCH_URLS).map(bn => { 
-                            const bd = game.bookmakers.find(bk => bk.title.toLowerCase().includes(bn.toLowerCase())); 
-                            return { name: bn, odds: bd ? bd.markets.find(m => m.key === mKey)?.outcomes.map(o => `${o.name}: ${o.price}`).join('|') : '-', status: bd ? 'active' : 'missing' }; 
-                        }) 
-                    });
                 }
             });
         });
@@ -325,6 +303,30 @@ async function fetchLiveArbs() {
         if (loadedMatches.length > 0) sendTelegramReport(loadedMatches.slice(0, 3));
     } catch (e) { DOM.arbFeed.innerHTML = `<p>${e.message}</p>`; }
     finally { DOM.refreshBtn.innerText = "Scan Live Markets"; }
+}
+
+function processArbMatch(game, mKey, point, bestLegs, calc) {
+    game.bookmakers.forEach(bk => { 
+        const cb = cleanBookie(bk.title); 
+        if (bookieBalances[cb] === undefined) { bookieBalances[cb] = 0; if (!BOOKIE_REGIONS[cb]) BOOKIE_REGIONS[cb] = 'EU'; } 
+    });
+    const marketLabel = mKey === 'h2h' ? 'Match Winner' : (mKey === 'totals' ? `Over/Under (${point})` : `Spread (${point})`);
+    matches.push({ 
+        id: `${game.id}_${mKey}_${point || '0'}`, 
+        sport: game.sport_title, 
+        market: marketLabel,
+        matchup: `${game.home_team} vs ${game.away_team}`, 
+        time: game.commence_time, 
+        displayTime: new Date(game.commence_time).toLocaleString(),
+        legs: bestLegs, 
+        margin: calc.margin, 
+        totalProb: calc.totalProb, 
+        isArb: calc.isArb, 
+        fullMarket: Object.keys(BOOKIE_SEARCH_URLS).map(bn => { 
+            const bd = game.bookmakers.find(bk => bk.title.toLowerCase().includes(bn.toLowerCase())); 
+            return { name: bn, odds: bd ? bd.markets.find(m => m.key === mKey)?.outcomes.map(o => `${o.name}: ${o.price}`).join('|') : '-', status: bd ? 'active' : 'missing' }; 
+        }) 
+    });
 }
 
 function renderArbCard(match, index, strategy = 'arb') {

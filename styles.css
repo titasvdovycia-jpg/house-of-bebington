@@ -840,10 +840,10 @@ body {
     transform: translateX(-50%) translateY(0);
     opacity: 1;
 }
-/* Dashboard Grid & Sidebar */
+/* Dashboard Grid - Expanded for v2.9.9 */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr 320px;
+    grid-template-columns: 1fr;
     gap: 2rem;
     align-items: start;
 }

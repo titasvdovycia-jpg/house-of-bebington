@@ -1,4 +1,4 @@
-// FLASH ENGINE v2.9.6 Stable - GLOBAL RESILIENCE WRAPPER
+// FLASH ENGINE v2.9.7 Stable - GLOBAL RESILIENCE WRAPPER
 window.onerror = function(msg, url, line, col, error) {
     const overlay = document.getElementById('flash-error-overlay');
     const statusText = document.getElementById('error-message-text');
@@ -8,7 +8,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 };
 
-console.log("⚡ [FLASH ENGINE] v2.9.6 Stable: Online & Initializing...");
+console.log("⚡ [FLASH ENGINE] v2.9.7 Stable: Online & Initializing...");
 
 const FIXED_STAKE = 10; // Fixed baseline for all calculations
 
@@ -199,8 +199,7 @@ async function fetchLiveArbs() {
             const currentKey = apiKeys[currentApiKeyIndex];
             try {
                 const queries = selectedSports.map(s => {
-                    // Fetch both h2h and totals for covered sports
-                    const markets = (s.includes('soccer') || s.includes('basketball')) ? 'h2h,totals' : 'h2h';
+                    const markets = 'h2h,totals,spreads';
                     return fetch(`https://api.the-odds-api.com/v4/sports/${s}/odds/?apiKey=${currentKey}&regions=uk,eu&markets=${markets}&oddsFormat=decimal`).then(async r => {
                         if (r.status === 401 || r.status === 429) throw { status: r.status };
                         recordTokenUsage();
@@ -292,9 +291,9 @@ async function fetchLiveArbs() {
                 arbArchive.push(m);
             }
         });
-        // Expire old ones
-        const now = new Date().toISOString();
-        arbArchive = arbArchive.filter(m => m.time > now);
+        // Expire old ones (48 hours stability)
+        const expiryDate = new Date(Date.now() - (48 * 60 * 60 * 1000)).toISOString();
+        arbArchive = arbArchive.filter(m => m.time > expiryDate);
         localStorage.setItem('arb_archive', JSON.stringify(arbArchive));
 
         updateDashboard(); 
@@ -354,8 +353,8 @@ function updateDashboard() {
 
 function updateOpportunitiesUI() {
     if (!DOM.oppFeed) return;
-    const now = new Date().toISOString();
-    arbArchive = arbArchive.filter(m => m.time > now);
+    const expiryDate = new Date(Date.now() - (48 * 60 * 60 * 1000)).toISOString();
+    arbArchive = arbArchive.filter(m => m.time > expiryDate);
     arbArchive.sort((a, b) => b.margin - a.margin);
     localStorage.setItem('arb_archive', JSON.stringify(arbArchive));
     
@@ -471,6 +470,7 @@ function logBet(matchId, strategy) {
         commence_time: match.time, 
         matchup: match.matchup, 
         sport: match.sport, 
+        market: match.market,
         legs: sr.stakedLegs.map(s => ({ ...s, stake: s.actualStake })), 
         totalStake: FIXED_STAKE, 
         possibleReturn: guaranteedReturn, 
@@ -558,7 +558,7 @@ function updatePortfolio() {
         return `
             <tr>
                 <td>${b.date}</td>
-                <td style="font-size: 0.8rem;"><strong>${b.matchup}</strong><br><small>${b.sport}</small></td>
+                <td style="font-size: 0.8rem;"><strong>${b.matchup}</strong><br><small>${b.sport} • ${b.market || 'Match Winner'}</small></td>
                 <td>${b.legs.length}-Way</td>
                 <td>${formatCurrency(b.totalStake)}</td>
                 <td style="color: ${profitColor}">${formatCurrency(b.possibleReturn)}</td>

@@ -1,4 +1,4 @@
-// FLASH ENGINE v2.9.8 Stable - GLOBAL RESILIENCE WRAPPER
+// FLASH ENGINE v2.9.9 Stable - GLOBAL RESILIENCE WRAPPER
 window.onerror = function(msg, url, line, col, error) {
     const overlay = document.getElementById('flash-error-overlay');
     const statusText = document.getElementById('error-message-text');
@@ -8,7 +8,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 };
 
-console.log("⚡ [FLASH ENGINE] v2.9.8 Stable: Online & Initializing...");
+console.log("⚡ [FLASH ENGINE] v2.9.9 Stable: Online & Initializing...");
 
 const FIXED_STAKE = 10; // Fixed baseline for all calculations
 
@@ -231,7 +231,6 @@ async function fetchLiveArbs() {
                     const existingBookie = dedupedMap.get(game.id).bookmakers.find(eb => eb.title === b.title);
                     if (!existingBookie) dedupedMap.get(game.id).bookmakers.push(b);
                     else {
-                        // Merge markets if they are different
                         b.markets.forEach(m => {
                             if (!existingBookie.markets.some(em => em.key === m.key)) existingBookie.markets.push(m);
                         });
@@ -244,7 +243,6 @@ async function fetchLiveArbs() {
         dedupedMap.forEach(game => {
             game.bookmakers = game.bookmakers.filter(b => !systemBlacklist.some(black => b.title.toLowerCase().includes(black.toLowerCase())));
             
-            // Handle multiple market types
             const marketKeys = ['h2h', 'totals', 'spreads'];
             marketKeys.forEach(mKey => {
                 if (mKey === 'h2h') {
@@ -256,6 +254,9 @@ async function fetchLiveArbs() {
                         });
                     });
                     const bestLegs = Object.keys(globalBest).map(name => ({ outcome: name, odds: globalBest[name].price, bookmaker: globalBest[name].bookie }));
+                    const expectedLegs = game.sport_key.includes('soccer') ? 3 : 2; 
+                    if (bestLegs.length < expectedLegs) return;
+                    
                     const calc = calculateArbitrage(bestLegs);
                     if (calc.margin > 0.05) processArbMatch(game, mKey, null, bestLegs, calc);
                 } else {
@@ -287,18 +288,12 @@ async function fetchLiveArbs() {
 
         loadedMatches = matches.sort((a,b) => b.margin - a.margin);
         
-        // Add to archive
-        loadedMatches.forEach(m => {
-            if (!arbArchive.some(am => am.id === m.id)) {
-                arbArchive.push(m);
-            }
-        });
-        // Expire old ones (48 hours stability)
+        // Archive auto-save & UI sync
+        loadedMatches.forEach(m => { if (!arbArchive.some(am => am.id === m.id)) arbArchive.push(m); });
         const expiryDate = new Date(Date.now() - (48 * 60 * 60 * 1000)).toISOString();
         arbArchive = arbArchive.filter(m => m.time > expiryDate);
         localStorage.setItem('arb_archive', JSON.stringify(arbArchive));
-
-        updateDashboard(); 
+        updateDashboard(); updateOpportunitiesUI();
         if (loadedMatches.length > 0) sendTelegramReport(loadedMatches.slice(0, 3));
     } catch (e) { DOM.arbFeed.innerHTML = `<p>${e.message}</p>`; }
     finally { DOM.refreshBtn.innerText = "Scan Live Markets"; }

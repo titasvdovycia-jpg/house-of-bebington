@@ -21,7 +21,7 @@
     <header class="navbar">
       <div class="logo">
         <span class="logo-icon" style="color: var(--accent-blue); text-shadow: 0 0 10px var(--accent-blue);">⚡</span>
-        <h1>House of <span class="highlight">Bebington</span> <span style="font-size: 0.6rem; color: #ffaa44; font-weight: bold; text-transform: uppercase;">v2.9.9 Stable</span></h1>
+        <h1>House of <span class="highlight">Bebington</span> <span style="font-size: 0.6rem; color: #ffaa44; font-weight: bold; text-transform: uppercase;">v2.9.11 Stable</span></h1>
       </div>
       <nav class="nav-links">
         <button id="nav-dashboard" class="nav-btn active">Dashboard</button>
@@ -67,11 +67,27 @@
       <div class="controls-bar">
         <p class="status-indicator" id="status-text"><span class="dot pulse"></span> Ready to scan...</p>
         <div style="display: flex; gap: 1rem; align-items: center;">
-            <button id="uk-filter-btn" class="region-toggle-btn">Region: ALL</button>
+            <button id="uk-filter-btn" class="region-toggle-btn">Region: UK ONLY</button>
             <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: var(--text-secondary); cursor: pointer;">
                 <input type="checkbox" id="auto-scan-toggle" /> Auto-Scan (Safe: 2hr)
             </label>
             <button id="refresh-btn" class="primary-btn">Scan Live Markets</button>
+        </div>
+      </div>
+      
+      <div class="settings-card" style="margin-bottom: 2rem;">
+        <h3 style="font-size: 1rem; margin-bottom: 1rem;">Targeted Sports Coverage</h3>
+        <div class="sports-grid" id="sports-selection-grid">
+            <!-- Populated by JS -->
+        </div>
+        <div class="token-meter" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span id="health-status-text" class="health-status-text safe" style="font-size: 0.75rem;">Usage: Safe</span>
+                <span id="actual-usage-info" style="font-size: 0.7rem; color: var(--text-secondary);">Total: 0 | 31-day: 0</span>
+            </div>
+            <div class="token-health-bar" style="height: 4px; margin-top: 4px;">
+                <div id="health-progress" class="health-progress" style="width: 20%; background: var(--accent-green);"></div>
+            </div>
         </div>
       </div>
 
@@ -231,27 +247,8 @@
 
         <button id="save-settings-btn" class="primary-btn" style="margin-top: 1rem;">Save Settings</button>
 
-        <div class="form-group" style="margin-top: 2.5rem; border-top: 1px solid var(--border-color); padding-top: 2rem;">
-          <label>Sports Coverage</label>
-          <p style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 1rem;">Select the sports you want to scan. More sports = faster token consumption.</p>
-          
-          <div class="sports-grid" id="sports-selection-grid">
-            <!-- Programmatically populated for better management -->
-          </div>
-
-          <div class="token-meter">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 0.825rem; font-weight: 600;">Monthly Token Drain</span>
-              <span id="health-status-text" class="health-status-text safe">Safe</span>
-            </div>
-            <div class="token-health-bar">
-              <div id="health-progress" class="health-progress" style="width: 20%; background: var(--accent-green);"></div>
-            </div>
-            <div class="token-stats">
-              <span id="token-usage-info">Using 0 tokens/month</span>
-              <span id="actual-usage-info">Total usage: 0 | 31-day: 0</span>
-            </div>
-          </div>
+        <div class="form-group" style="margin-top: 1rem;">
+          <p style="color: var(--text-secondary); font-size: 0.75rem;">Sports selection has moved to the Dashboard for faster access.</p>
         </div>
 
         <div class="form-group" style="margin-top: 2.5rem; border-top: 1px solid var(--border-color); padding-top: 2rem;">

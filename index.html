@@ -21,14 +21,13 @@
     <header class="navbar">
       <div class="logo">
         <span class="logo-icon" style="color: var(--accent-blue); text-shadow: 0 0 10px var(--accent-blue);">⚡</span>
-        <h1>House of <span class="highlight">Bebington</span> <span style="font-size: 0.6rem; color: #ffaa44; font-weight: bold; text-transform: uppercase;">v2.9.11 Stable</span></h1>
+        <h1>House of <span class="highlight">Bebington</span> <span style="font-size: 0.6rem; color: #ffaa44; font-weight: bold; text-transform: uppercase;">v2.9.12 Stable</span></h1>
       </div>
       <nav class="nav-links">
-        <button id="nav-dashboard" class="nav-btn active">Dashboard</button>
-        <button id="nav-portfolio" class="nav-btn">Portfolio</button>
+        <button id="nav-dashboard" class="nav-btn active">Main Page</button>
         <button id="nav-bankroll" class="nav-btn">Bankroll</button>
         <button id="nav-opportunities" class="nav-btn highlight">Opportunities</button>
-        <button id="nav-settings" class="nav-btn">Settings</button>
+        <button id="nav-settings" class="nav-btn" title="Settings">&#9881;</button>
       </nav>
     </header>
 
@@ -64,30 +63,31 @@
         </div>
       </div>
 
-      <div class="controls-bar">
-        <p class="status-indicator" id="status-text"><span class="dot pulse"></span> Ready to scan...</p>
-        <div style="display: flex; gap: 1rem; align-items: center;">
-            <button id="uk-filter-btn" class="region-toggle-btn">Region: UK ONLY</button>
-            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: var(--text-secondary); cursor: pointer;">
+      <div class="settings-card" style="margin-bottom: 2rem; display: flex; gap: 2rem; align-items: flex-start;">
+        <div style="flex: 1;">
+            <h3 style="font-size: 1rem; margin-bottom: 1rem;">Targeted Sports Coverage</h3>
+            <div class="sports-grid" id="sports-selection-grid">
+                <!-- Populated by JS -->
+            </div>
+            <div class="token-meter" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="health-status-text" class="health-status-text safe" style="font-size: 0.75rem;">Usage: Safe</span>
+                    <span id="actual-usage-info" style="font-size: 0.7rem; color: var(--text-secondary);">Total: 0 | 31-day: 0</span>
+                </div>
+                <div class="token-health-bar" style="height: 4px; margin-top: 4px;">
+                    <div id="health-progress" class="health-progress" style="width: 20%; background: var(--accent-green);"></div>
+                </div>
+            </div>
+        </div>
+
+        <div style="width: 350px; border-left: 1px solid var(--border-color); padding-left: 2rem; display: flex; flex-direction: column; gap: 1rem;">
+            <h3 style="font-size: 1rem; margin-bottom: 0.5rem;">Scan Controls</h3>
+            <p class="status-indicator" id="status-text" style="font-size: 0.75rem;"><span class="dot pulse"></span> Ready</p>
+            <button id="uk-filter-btn" class="region-toggle-btn" style="width: 100%;">Region: UK ONLY</button>
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); cursor: pointer;">
                 <input type="checkbox" id="auto-scan-toggle" /> Auto-Scan (Safe: 2hr)
             </label>
-            <button id="refresh-btn" class="primary-btn">Scan Live Markets</button>
-        </div>
-      </div>
-      
-      <div class="settings-card" style="margin-bottom: 2rem;">
-        <h3 style="font-size: 1rem; margin-bottom: 1rem;">Targeted Sports Coverage</h3>
-        <div class="sports-grid" id="sports-selection-grid">
-            <!-- Populated by JS -->
-        </div>
-        <div class="token-meter" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span id="health-status-text" class="health-status-text safe" style="font-size: 0.75rem;">Usage: Safe</span>
-                <span id="actual-usage-info" style="font-size: 0.7rem; color: var(--text-secondary);">Total: 0 | 31-day: 0</span>
-            </div>
-            <div class="token-health-bar" style="height: 4px; margin-top: 4px;">
-                <div id="health-progress" class="health-progress" style="width: 20%; background: var(--accent-green);"></div>
-            </div>
+            <button id="refresh-btn" class="primary-btn" style="width: 100%; padding: 15px;">Scan Live Markets</button>
         </div>
       </div>
 
@@ -130,8 +130,48 @@
         <h3>Capital Rebalancer</h3>
         <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Move funds between bookmakers to cover bottle-necks.</p>
         <div id="rebalance-suggestions" style="display: flex; flex-direction: column; gap: 0.75rem;">
-            <!-- Suggetions injected here -->
+            <!-- Suggestions injected here -->
             <p style="font-size: 0.8rem; color: #666;">Scan markets or update balances to see rebalancing advice.</p>
+        </div>
+      </div>
+
+      <!-- Portfolio Integration -->
+      <div class="settings-card" style="max-width: 100%; width: 100%; margin-top: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3>Active & Recent Betting Portfolio</h3>
+            <div style="display: flex; gap: 1.5rem;">
+                <div style="text-align: right;">
+                    <p style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase;">Total Profit</p>
+                    <h4 id="port-total-profit" style="color: var(--accent-green);">£0.00</h4>
+                </div>
+                <div style="text-align: right;">
+                    <p style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase;">A. ROI</p>
+                    <h4 id="port-roi" style="color: var(--accent-blue);">0.00%</h4>
+                </div>
+                <div style="text-align: right;">
+                    <p style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase;">Active</p>
+                    <h4 id="port-active-bets">0</h4>
+                </div>
+            </div>
+        </div>
+        
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Event</th>
+                        <th>Type</th>
+                        <th>Stake</th>
+                        <th>Potential</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="bet-history-table">
+                    <!-- JS will populate -->
+                </tbody>
+            </table>
         </div>
       </div>
     </main>
@@ -153,56 +193,6 @@
       </div>
     </main>
     
-    <!-- Portfolio View -->
-    <main class="dashboard" id="view-portfolio" style="display: none;">
-      <div class="metrics-panel">
-        <div class="metric-card">
-          <p class="metric-label">Total Net Profit</p>
-          <h2 class="metric-value" id="port-total-profit">£0.00</h2>
-        </div>
-        <div class="metric-card">
-          <p class="metric-label">Return on Investment</p>
-          <h2 class="metric-value" id="port-roi">0.00%</h2>
-        </div>
-        <div class="metric-card">
-          <p class="metric-label">Active Bets</p>
-          <h2 class="metric-value" id="port-active-bets">0</h2>
-        </div>
-      </div>
-
-      <div class="settings-card" style="max-width: 100%; width: 100%; margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-           <h3>Profit Trajectory</h3>
-           <button id="auto-settle-btn" class="primary-btn" style="padding: 6px 12px; font-size: 0.75rem;">↻ Auto-Settle Past 3 Days</button>
-        </div>
-        <p id="auto-settle-status" style="color: var(--accent-blue); font-size: 0.75rem; margin-bottom: 1rem; display: none;">Fetching scores...</p>
-        <div style="height: 250px; width: 100%;">
-           <canvas id="profitChart"></canvas>
-        </div>
-      </div>
-
-      <div class="settings-card" style="max-width: 100%; width: 100%;">
-        <h3>Bet History</h3>
-        <div style="overflow-x: auto; margin-top: 1rem;">
-          <table class="history-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Match</th>
-                <th>Market</th>
-                <th>Stake</th>
-                <th>Return</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="bet-history-table">
-              <!-- JS will populate -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </main>
 
     <!-- Settings View -->
     <main class="settings-view" id="view-settings" style="display: none;">

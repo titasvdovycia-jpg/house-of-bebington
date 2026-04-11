@@ -1,4 +1,4 @@
-// FLASH ENGINE v2.7 - GLOBAL RESILIENCE WRAPPER
+// FLASH ENGINE v2.9.6 Stable - GLOBAL RESILIENCE WRAPPER
 window.onerror = function(msg, url, line, col, error) {
     const overlay = document.getElementById('flash-error-overlay');
     const statusText = document.getElementById('error-message-text');
@@ -8,7 +8,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
 };
 
-console.log("⚡ [FLASH ENGINE] v2.7: Online & Initializing...");
+console.log("⚡ [FLASH ENGINE] v2.9.6 Stable: Online & Initializing...");
 
 const FIXED_STAKE = 10; // Fixed baseline for all calculations
 
